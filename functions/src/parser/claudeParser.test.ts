@@ -29,4 +29,9 @@ describe('createClaudeParser', () => {
     const parse = createClaudeParser(async () => ({ content: [{ type: 'image' }] }));
     await expect(parse('משהו')).resolves.toEqual({ action: 'unclear', items: [] });
   });
+
+  it('falls back to unclear when items contains a non-string entry', async () => {
+    const parse = createClaudeParser(mockCreate('{"action":"add","items":["קפה",42]}'));
+    await expect(parse('קפה ו-42 משהו')).resolves.toEqual({ action: 'unclear', items: [] });
+  });
 });

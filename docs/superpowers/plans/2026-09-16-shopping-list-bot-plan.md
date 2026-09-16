@@ -528,6 +528,11 @@ describe('createClaudeParser', () => {
     const parse = createClaudeParser(async () => ({ content: [{ type: 'image' }] }));
     await expect(parse('משהו')).resolves.toEqual({ action: 'unclear', items: [] });
   });
+
+  it('falls back to unclear when items contains a non-string entry', async () => {
+    const parse = createClaudeParser(mockCreate('{"action":"add","items":["קפה",42]}'));
+    await expect(parse('קפה ו-42 משהו')).resolves.toEqual({ action: 'unclear', items: [] });
+  });
 });
 ```
 
@@ -582,7 +587,8 @@ export function createClaudeParser(createMessage: ClaudeMessagesCreate) {
       if (
         typeof parsed.action === 'string' &&
         VALID_ACTIONS.includes(parsed.action) &&
-        Array.isArray(parsed.items)
+        Array.isArray(parsed.items) &&
+        parsed.items.every((item: unknown) => typeof item === 'string')
       ) {
         return parsed as AiParsedMessage;
       }
@@ -597,7 +603,7 @@ export function createClaudeParser(createMessage: ClaudeMessagesCreate) {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm --prefix functions run test -- claudeParser.test.ts`
-Expected: PASS (4 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 5: Commit**
 

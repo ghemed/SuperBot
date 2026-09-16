@@ -41,7 +41,8 @@ export function createClaudeParser(createMessage: ClaudeMessagesCreate) {
       if (
         typeof parsed.action === 'string' &&
         VALID_ACTIONS.includes(parsed.action) &&
-        Array.isArray(parsed.items)
+        Array.isArray(parsed.items) &&
+        parsed.items.every((item: unknown) => typeof item === 'string')
       ) {
         return parsed as AiParsedMessage;
       }
