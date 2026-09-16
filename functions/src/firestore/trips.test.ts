@@ -27,4 +27,16 @@ describe('getOrCreateActiveTrip', () => {
     const all = await db.collection('households/main/trips').get();
     expect(all.size).toBe(1);
   });
+
+  it('does not create two active trips when called concurrently', async () => {
+    // This is exactly the "both spouses say 'אני בסופר' at once" scenario
+    // the single-active-trip design exists for - not just a theoretical race.
+    const [first, second] = await Promise.all([
+      getOrCreateActiveTrip(db, 111),
+      getOrCreateActiveTrip(db, 222),
+    ]);
+    expect(second.id).toBe(first.id);
+    const all = await db.collection('households/main/trips').get();
+    expect(all.size).toBe(1);
+  });
 });

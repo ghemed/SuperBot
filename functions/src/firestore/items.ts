@@ -20,16 +20,25 @@ export async function addItems(db: Firestore, names: string[], addedBy: number):
   const added: string[] = [];
   for (const name of names) {
     const normalizedName = normalizeItemName(name);
-    const existing = await col.where('normalizedName', '==', normalizedName).limit(1).get();
-    if (!existing.empty) continue;
-    await col.add({
-      name: name.trim(),
-      normalizedName,
-      addedAt: Date.now(),
-      addedBy,
-      recurring: false,
+    // The duplicate-check and the write must happen inside one transaction:
+    // two concurrent calls for the same item name (e.g. both spouses
+    // texting "חלב" seconds apart) would otherwise both see "not found" in
+    // a plain read-then-write and both create a duplicate doc.
+    const wasAdded = await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(
+        col.where('normalizedName', '==', normalizedName).limit(1)
+      );
+      if (!existing.empty) return false;
+      transaction.set(col.doc(), {
+        name: name.trim(),
+        normalizedName,
+        addedAt: Date.now(),
+        addedBy,
+        recurring: false,
+      });
+      return true;
     });
-    added.push(name.trim());
+    if (wasAdded) added.push(name.trim());
   }
   return added;
 }

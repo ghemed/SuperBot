@@ -41,4 +41,14 @@ describe('items', () => {
     const removed = await removeItems(db, ['משהו שלא קיים']);
     expect(removed).toEqual([]);
   });
+
+  it('does not create a duplicate when two adds for the same item run concurrently', async () => {
+    const [first, second] = await Promise.all([
+      addItems(db, ['חלב'], 111),
+      addItems(db, ['חלב'], 222),
+    ]);
+    expect([...first, ...second]).toEqual(['חלב']);
+    const current = await listItems(db);
+    expect(current).toHaveLength(1);
+  });
 });

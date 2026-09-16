@@ -953,6 +953,16 @@ describe('items', () => {
     const removed = await removeItems(db, ['משהו שלא קיים']);
     expect(removed).toEqual([]);
   });
+
+  it('does not create a duplicate when two adds for the same item run concurrently', async () => {
+    const [first, second] = await Promise.all([
+      addItems(db, ['חלב'], 111),
+      addItems(db, ['חלב'], 222),
+    ]);
+    expect([...first, ...second]).toEqual(['חלב']);
+    const current = await listItems(db);
+    expect(current).toHaveLength(1);
+  });
 });
 ```
 
@@ -982,6 +992,18 @@ describe('getOrCreateActiveTrip', () => {
   it('returns the existing active trip instead of creating a second one', async () => {
     const first = await getOrCreateActiveTrip(db, 111);
     const second = await getOrCreateActiveTrip(db, 222);
+    expect(second.id).toBe(first.id);
+    const all = await db.collection('households/main/trips').get();
+    expect(all.size).toBe(1);
+  });
+
+  it('does not create two active trips when called concurrently', async () => {
+    // This is exactly the "both spouses say 'אני בסופר' at once" scenario
+    // the single-active-trip design exists for - not just a theoretical race.
+    const [first, second] = await Promise.all([
+      getOrCreateActiveTrip(db, 111),
+      getOrCreateActiveTrip(db, 222),
+    ]);
     expect(second.id).toBe(first.id);
     const all = await db.collection('households/main/trips').get();
     expect(all.size).toBe(1);
@@ -1019,16 +1041,25 @@ export async function addItems(db: Firestore, names: string[], addedBy: number):
   const added: string[] = [];
   for (const name of names) {
     const normalizedName = normalizeItemName(name);
-    const existing = await col.where('normalizedName', '==', normalizedName).limit(1).get();
-    if (!existing.empty) continue;
-    await col.add({
-      name: name.trim(),
-      normalizedName,
-      addedAt: Date.now(),
-      addedBy,
-      recurring: false,
+    // The duplicate-check and the write must happen inside one transaction:
+    // two concurrent calls for the same item name (e.g. both spouses
+    // texting "חלב" seconds apart) would otherwise both see "not found" in
+    // a plain read-then-write and both create a duplicate doc.
+    const wasAdded = await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(
+        col.where('normalizedName', '==', normalizedName).limit(1)
+      );
+      if (!existing.empty) return false;
+      transaction.set(col.doc(), {
+        name: name.trim(),
+        normalizedName,
+        addedAt: Date.now(),
+        addedBy,
+        recurring: false,
+      });
+      return true;
     });
-    added.push(name.trim());
+    if (wasAdded) added.push(name.trim());
   }
   return added;
 }
@@ -1070,21 +1101,28 @@ function tripsCollection(db: Firestore) {
 
 export async function getOrCreateActiveTrip(db: Firestore, startedBy: number): Promise<Trip> {
   const col = tripsCollection(db);
-  const active = await col.where('status', '==', 'active').limit(1).get();
-  if (!active.empty) {
-    const doc = active.docs[0];
-    return { id: doc.id, ...(doc.data() as Omit<Trip, 'id'>) };
-  }
-  const startedAt = Date.now();
-  const ref = await col.add({ status: 'active', startedAt, startedBy, checkedItemIds: [] });
-  return { id: ref.id, status: 'active', startedAt, startedBy };
+  // Same reasoning as addItems: check-then-create must be one transaction,
+  // or two concurrent "אני בסופר" messages (plausibly from both spouses at
+  // once - the exact scenario this single-active-trip design is for) could
+  // each see "no active trip" and create two, splitting shopping progress.
+  return db.runTransaction(async (transaction) => {
+    const active = await transaction.get(col.where('status', '==', 'active').limit(1));
+    if (!active.empty) {
+      const doc = active.docs[0];
+      return { id: doc.id, ...(doc.data() as Omit<Trip, 'id'>) };
+    }
+    const startedAt = Date.now();
+    const ref = col.doc();
+    transaction.set(ref, { status: 'active', startedAt, startedBy, checkedItemIds: [] });
+    return { id: ref.id, status: 'active', startedAt, startedBy };
+  });
 }
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `firebase emulators:exec --project=demo-superbot --only firestore "npm --prefix functions run test:emulator"`
-Expected: PASS (6 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: Commit**
 
