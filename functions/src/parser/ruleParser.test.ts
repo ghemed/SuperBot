@@ -45,4 +45,8 @@ describe('parseRuleBased', () => {
       items: ['חלב', 'ביצים'],
     });
   });
+
+  it('defers to AI when a removal message has an ambiguous trailing line', () => {
+    expect(parseRuleBased('מחק חלב\nהאם בסדר?')).toBeNull();
+  });
 });

@@ -398,6 +398,10 @@ describe('parseRuleBased', () => {
       items: ['חלב', 'ביצים'],
     });
   });
+
+  it('defers to AI when a removal message has an ambiguous trailing line', () => {
+    expect(parseRuleBased('מחק חלב\nהאם בסדר?')).toBeNull();
+  });
 });
 ```
 
@@ -432,14 +436,19 @@ export function parseRuleBased(message: string): RuleParseResult | null {
   const trimmed = message.trim();
   if (trimmed.length === 0) return null;
 
+  // Checked before REMOVE_PATTERN, and against the whole message: since
+  // REMOVE_PATTERN's capture now spans newlines (see the dotAll comment
+  // above), a removal keyword earlier in the message would otherwise let a
+  // question or ambiguous phrase on a later line get swallowed in as a
+  // literal item instead of deferring to the AI fallback.
+  if (AMBIGUOUS_START_PATTERN.test(trimmed)) {
+    return null;
+  }
+
   const removeMatch = trimmed.match(REMOVE_PATTERN);
   if (removeMatch) {
     const items = splitItems(removeMatch[1]);
     return items.length > 0 ? { action: 'remove', items } : null;
-  }
-
-  if (AMBIGUOUS_START_PATTERN.test(trimmed)) {
-    return null;
   }
 
   const items = splitItems(trimmed);
@@ -450,7 +459,7 @@ export function parseRuleBased(message: string): RuleParseResult | null {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm --prefix functions run test -- ruleParser.test.ts`
-Expected: PASS (9 tests)
+Expected: PASS (10 tests)
 
 - [ ] **Step 5: Commit**
 

@@ -21,14 +21,19 @@ export function parseRuleBased(message: string): RuleParseResult | null {
   const trimmed = message.trim();
   if (trimmed.length === 0) return null;
 
+  // Checked before REMOVE_PATTERN, and against the whole message: since
+  // REMOVE_PATTERN's capture now spans newlines (see the dotAll comment
+  // above), a removal keyword earlier in the message would otherwise let a
+  // question or ambiguous phrase on a later line get swallowed in as a
+  // literal item instead of deferring to the AI fallback.
+  if (AMBIGUOUS_START_PATTERN.test(trimmed)) {
+    return null;
+  }
+
   const removeMatch = trimmed.match(REMOVE_PATTERN);
   if (removeMatch) {
     const items = splitItems(removeMatch[1]);
     return items.length > 0 ? { action: 'remove', items } : null;
-  }
-
-  if (AMBIGUOUS_START_PATTERN.test(trimmed)) {
-    return null;
   }
 
   const items = splitItems(trimmed);
