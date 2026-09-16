@@ -9,6 +9,7 @@ type ClaudeResponse = { content: ClaudeContentBlock[] };
 export type ClaudeMessagesCreate = (args: {
   model: string;
   max_tokens: number;
+  temperature: number;
   system: string;
   messages: { role: 'user'; content: string }[];
 }) => Promise<ClaudeResponse>;
@@ -22,14 +23,26 @@ const SYSTEM_PROMPT = `את/ה מפענח/ת הודעות לבוט רשימת ק
 {"action":"add"|"remove"|"show"|"at_store"|"unclear","items":["פריט1","פריט2"]}
 עבור show/at_store/unclear החזר/י items כמערך ריק.`;
 
+const ACTIONS_REQUIRING_ITEMS = new Set(['add', 'remove']);
+
 export function createClaudeParser(createMessage: ClaudeMessagesCreate) {
   return async function aiParse(text: string): Promise<AiParsedMessage> {
-    const response = await createMessage({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: text }],
-    });
+    let response: ClaudeResponse;
+    try {
+      response = await createMessage({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        temperature: 0,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: text }],
+      });
+    } catch {
+      // The Anthropic API is an external dependency that can reject for
+      // routine reasons (rate limit, timeout, transient 5xx) - that's the
+      // most likely "unexpected response" in production, not a corner case,
+      // so it degrades the same way a malformed response does below.
+      return { action: 'unclear', items: [] };
+    }
 
     const block = response.content[0];
     if (!block || block.type !== 'text' || !block.text) {
@@ -38,11 +51,22 @@ export function createClaudeParser(createMessage: ClaudeMessagesCreate) {
 
     try {
       const parsed = JSON.parse(block.text);
+      const hasValidItems =
+        Array.isArray(parsed.items) &&
+        parsed.items.every(
+          (item: unknown) => typeof item === 'string' && item.trim().length > 0
+        );
+      // add/remove with an empty items array isn't a confident answer - the
+      // model extracted nothing, so a caller reacting to e.g. "already on
+      // the list" for an empty add would be actively misleading.
+      const satisfiesItemRequirement =
+        !ACTIONS_REQUIRING_ITEMS.has(parsed.action) || parsed.items?.length > 0;
+
       if (
         typeof parsed.action === 'string' &&
         VALID_ACTIONS.includes(parsed.action) &&
-        Array.isArray(parsed.items) &&
-        parsed.items.every((item: unknown) => typeof item === 'string')
+        hasValidItems &&
+        satisfiesItemRequirement
       ) {
         return parsed as AiParsedMessage;
       }

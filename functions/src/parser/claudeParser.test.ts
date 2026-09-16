@@ -34,4 +34,31 @@ describe('createClaudeParser', () => {
     const parse = createClaudeParser(mockCreate('{"action":"add","items":["קפה",42]}'));
     await expect(parse('קפה ו-42 משהו')).resolves.toEqual({ action: 'unclear', items: [] });
   });
+
+  it('falls back to unclear when the API call itself rejects', async () => {
+    const parse = createClaudeParser(async () => {
+      throw new Error('rate limited');
+    });
+    await expect(parse('קפה')).resolves.toEqual({ action: 'unclear', items: [] });
+  });
+
+  it('falls back to unclear when action is add with no items', async () => {
+    const parse = createClaudeParser(mockCreate('{"action":"add","items":[]}'));
+    await expect(parse('משהו לא ברור')).resolves.toEqual({ action: 'unclear', items: [] });
+  });
+
+  it('falls back to unclear when action is remove with no items', async () => {
+    const parse = createClaudeParser(mockCreate('{"action":"remove","items":[]}'));
+    await expect(parse('משהו לא ברור')).resolves.toEqual({ action: 'unclear', items: [] });
+  });
+
+  it('falls back to unclear when items contains a blank string', async () => {
+    const parse = createClaudeParser(mockCreate('{"action":"add","items":["קפה","   "]}'));
+    await expect(parse('קפה ומשהו')).resolves.toEqual({ action: 'unclear', items: [] });
+  });
+
+  it('accepts an empty items array for show/at_store/unclear actions', async () => {
+    const parse = createClaudeParser(mockCreate('{"action":"show","items":[]}'));
+    await expect(parse('מה יש')).resolves.toEqual({ action: 'show', items: [] });
+  });
 });
