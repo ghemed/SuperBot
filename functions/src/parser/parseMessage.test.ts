@@ -41,6 +41,10 @@ describe('parseMessage', () => {
       action: 'show',
       items: [],
     });
+    await expect(parseMessage('אני בסופר,', aiParse)).resolves.toEqual({
+      action: 'at_store',
+      items: [],
+    });
     expect(aiParse).not.toHaveBeenCalled();
   });
 });

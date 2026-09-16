@@ -15,12 +15,12 @@ const AT_STORE_PATTERNS = [/^אני\s+בסופר$/u, /^בסופר$/u, /^הגעת
 
 export async function parseMessage(text: string, aiParse: AiParse): Promise<ParsedMessage> {
   const trimmed = text.trim();
-  // Trailing punctuation ("אני בסופר.", "הצג רשימה!") shouldn't stop a
-  // special phrase from matching. Only used for this check - the original
-  // `trimmed` (not this stripped version) is what flows into the rule
-  // engine and AI fallback below, so a real item name's own punctuation is
-  // never touched.
-  const forPhraseMatch = trimmed.replace(/[.!]+$/u, '').trim();
+  // Trailing punctuation ("אני בסופר.", "הצג רשימה!", "אני בסופר,")
+  // shouldn't stop a special phrase from matching. Only used for this
+  // check - the original `trimmed` (not this stripped version) is what
+  // flows into the rule engine and AI fallback below, so a real item
+  // name's own punctuation is never touched.
+  const forPhraseMatch = trimmed.replace(/[.!,;]+$/u, '').trim();
 
   if (SHOW_LIST_PATTERNS.some((p) => p.test(forPhraseMatch))) {
     return { action: 'show', items: [] };

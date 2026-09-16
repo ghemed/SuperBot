@@ -315,8 +315,14 @@ Expected: FAIL - `Cannot find module './splitItems'`
 // becomes "לחם"), or on whitespace directly before a double vav ("וו",
 // consumed only up to the space) - Hebrew loanwords spell an initial "w"
 // sound with a double vav (e.g. וופלים/waffles), and that must not be
-// mistaken for "ו" + a word starting with vav (e.g. ורד/rose - which is
-// genuinely ambiguous with the conjunction and left to the AI fallback).
+// mistaken for "ו" + a word starting with vav (e.g. ורד/rose).
+// Known accepted limitation: that single-vav case is genuinely ambiguous
+// and NOT caught by the AI fallback - parseRuleBased (which calls this
+// function) returns a confident, non-null result either way, so
+// parseMessage never falls back to AI for it. A single-vav item name
+// (e.g. "ורד"/rose) typed after another item will have its vav silently
+// stripped as if it were the conjunction. Accepted as low-probability for
+// a grocery list; revisit if it ever causes a real mis-parse.
 const ITEM_SEPARATOR = /\s+ו(?=[א-הז-ת])|\s+(?=וו)/;
 
 export function splitItems(text: string): string[] {
@@ -717,6 +723,10 @@ describe('parseMessage', () => {
       action: 'show',
       items: [],
     });
+    await expect(parseMessage('אני בסופר,', aiParse)).resolves.toEqual({
+      action: 'at_store',
+      items: [],
+    });
     expect(aiParse).not.toHaveBeenCalled();
   });
 });
@@ -747,12 +757,12 @@ const AT_STORE_PATTERNS = [/^אני\s+בסופר$/u, /^בסופר$/u, /^הגעת
 
 export async function parseMessage(text: string, aiParse: AiParse): Promise<ParsedMessage> {
   const trimmed = text.trim();
-  // Trailing punctuation ("אני בסופר.", "הצג רשימה!") shouldn't stop a
-  // special phrase from matching. Only used for this check - the original
-  // `trimmed` (not this stripped version) is what flows into the rule
-  // engine and AI fallback below, so a real item name's own punctuation is
-  // never touched.
-  const forPhraseMatch = trimmed.replace(/[.!]+$/u, '').trim();
+  // Trailing punctuation ("אני בסופר.", "הצג רשימה!", "אני בסופר,")
+  // shouldn't stop a special phrase from matching. Only used for this
+  // check - the original `trimmed` (not this stripped version) is what
+  // flows into the rule engine and AI fallback below, so a real item
+  // name's own punctuation is never touched.
+  const forPhraseMatch = trimmed.replace(/[.!,;]+$/u, '').trim();
 
   if (SHOW_LIST_PATTERNS.some((p) => p.test(forPhraseMatch))) {
     return { action: 'show', items: [] };
@@ -773,7 +783,7 @@ export async function parseMessage(text: string, aiParse: AiParse): Promise<Pars
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm --prefix functions run test -- parseMessage.test.ts`
-Expected: PASS (5 tests)
+Expected: PASS (5 tests, one of them with 3 assertions covering `.`/`!`/`,`)
 
 - [ ] **Step 5: Commit**
 
