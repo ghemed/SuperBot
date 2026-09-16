@@ -1,0 +1,11 @@
+{
+  "name": "superbot",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "vitest": "^2.0.5"
+  },
+  "scripts": {
+    "test": "vitest run web/js"
+  }
+}
