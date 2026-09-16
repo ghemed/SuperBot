@@ -30,4 +30,17 @@ describe('parseMessage', () => {
     expect(result).toEqual({ action: 'add', items: ['קפה'] });
     expect(aiParse).toHaveBeenCalledWith('אין לנו יותר קפה');
   });
+
+  it('tolerates trailing punctuation on a special phrase', async () => {
+    const aiParse = vi.fn();
+    await expect(parseMessage('אני בסופר.', aiParse)).resolves.toEqual({
+      action: 'at_store',
+      items: [],
+    });
+    await expect(parseMessage('הצג רשימה!', aiParse)).resolves.toEqual({
+      action: 'show',
+      items: [],
+    });
+    expect(aiParse).not.toHaveBeenCalled();
+  });
 });
