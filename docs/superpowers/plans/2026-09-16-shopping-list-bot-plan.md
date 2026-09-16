@@ -849,6 +849,17 @@ describe('isRecurringCandidate', () => {
   it('is false when the item appears in only 2 of the last 4 trips', () => {
     expect(isRecurringCandidate(['t1', 't3'], ['t1', 't2', 't3', 't4'])).toBe(false);
   });
+
+  it('does not itself limit recentCompletedTripIds to 4 - callers must', () => {
+    // Pins the current contract: passing more than 4 "recent" trips
+    // silently loosens "3 of the last 4" to "3 of the last N." The one
+    // real caller (getRecurringCandidates) queries Firestore with
+    // limit(4), so this never happens in production - documented above
+    // isRecurringCandidate rather than defended against here.
+    expect(
+      isRecurringCandidate(['t1', 't2', 't3'], ['t1', 't2', 't3', 't4', 't5'])
+    ).toBe(true);
+  });
 });
 ```
 
@@ -861,6 +872,10 @@ Expected: FAIL - `Cannot find module './recurring.js'`
 
 ```javascript
 // web/js/recurring.js
+// Caller must pass at most the 4 most recent completed trip ids - this
+// function doesn't slice or validate that itself, it just checks "3 of
+// whatever's given." The one real caller (getRecurringCandidates) queries
+// Firestore with limit(4), so the contract holds in production.
 export function isRecurringCandidate(itemTripIds, recentCompletedTripIds) {
   if (recentCompletedTripIds.length < 4) return false;
   const hits = recentCompletedTripIds.filter((id) => itemTripIds.includes(id)).length;
@@ -871,7 +886,7 @@ export function isRecurringCandidate(itemTripIds, recentCompletedTripIds) {
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `npm test -- web/js/recurring.test.js`
-Expected: PASS (4 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 6: Commit**
 
