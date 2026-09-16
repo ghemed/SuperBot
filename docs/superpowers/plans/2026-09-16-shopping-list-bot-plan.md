@@ -411,7 +411,10 @@ export interface RuleParseResult {
 }
 
 const REMOVE_PATTERN = /^(?:תוריד|הורד|הסר|מחק|תסיר)\s+(?:את\s+)?(.+)$/u;
-const AMBIGUOUS_START_PATTERN = /[?]|^(?:אין|צריך|כדאי|נגמר)\b/u;
+// \b is ASCII-only in JS regex (defined via \w) and never matches next to
+// Hebrew letters, so a keyword boundary has to be spelled out as
+// whitespace-or-end instead of \b.
+const AMBIGUOUS_START_PATTERN = /[?]|^(?:אין|צריך|כדאי|נגמר)(?:\s|$)/u;
 
 export function parseRuleBased(message: string): RuleParseResult | null {
   const trimmed = message.trim();
