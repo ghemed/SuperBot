@@ -38,4 +38,11 @@ describe('parseRuleBased', () => {
   it('returns null for an empty message', () => {
     expect(parseRuleBased('   ')).toBeNull();
   });
+
+  it('splits a multi-line removal message instead of falling through to add', () => {
+    expect(parseRuleBased('מחק\nחלב\nביצים')).toEqual({
+      action: 'remove',
+      items: ['חלב', 'ביצים'],
+    });
+  });
 });

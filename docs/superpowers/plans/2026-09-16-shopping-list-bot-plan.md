@@ -391,6 +391,13 @@ describe('parseRuleBased', () => {
   it('returns null for an empty message', () => {
     expect(parseRuleBased('   ')).toBeNull();
   });
+
+  it('splits a multi-line removal message instead of falling through to add', () => {
+    expect(parseRuleBased('מחק\nחלב\nביצים')).toEqual({
+      action: 'remove',
+      items: ['חלב', 'ביצים'],
+    });
+  });
 });
 ```
 
@@ -410,7 +417,12 @@ export interface RuleParseResult {
   items: string[];
 }
 
-const REMOVE_PATTERN = /^(?:תוריד|הורד|הסר|מחק|תסיר)\s+(?:את\s+)?(.+)$/u;
+// The `s` (dotAll) flag is required: without it, `.` can't cross a newline
+// and `$` needs the true end of string, so a removal keyword followed by a
+// multi-line message (an ordinary shift+enter on Telegram) fails to match
+// at all - and silently falls through to being treated as an *add* of the
+// keyword itself, rather than deferring or erroring.
+const REMOVE_PATTERN = /^(?:תוריד|הורד|הסר|מחק|תסיר)\s+(?:את\s+)?(.+)$/su;
 // \b is ASCII-only in JS regex (defined via \w) and never matches next to
 // Hebrew letters, so a keyword boundary has to be spelled out as
 // whitespace-or-end instead of \b.
@@ -438,7 +450,7 @@ export function parseRuleBased(message: string): RuleParseResult | null {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm --prefix functions run test -- ruleParser.test.ts`
-Expected: PASS (8 tests)
+Expected: PASS (9 tests)
 
 - [ ] **Step 5: Commit**
 
