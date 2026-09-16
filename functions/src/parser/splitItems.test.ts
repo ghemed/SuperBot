@@ -30,4 +30,9 @@ describe('splitItems', () => {
   it('does not split a single word that happens to start with vav', () => {
     expect(splitItems('וופלים')).toEqual(['וופלים']);
   });
+
+  it('does not corrupt a double-vav loanword when it is not the first item', () => {
+    expect(splitItems('חלב, וופלים')).toEqual(['חלב', 'וופלים']);
+    expect(splitItems('חלב וופלים')).toEqual(['חלב', 'וופלים']);
+  });
 });
