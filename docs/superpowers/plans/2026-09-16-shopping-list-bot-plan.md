@@ -439,6 +439,11 @@ const AMBIGUOUS_START_PATTERN = /[?]|^(?:אין|צריך|כדאי|נגמר)(?:\s
 // A removal keyword with nothing to remove (e.g. just "מחק", possibly
 // followed by the bare object marker "את") is ambiguous, not an add of the
 // keyword itself - defer to the AI fallback rather than guessing.
+// Known accepted gap: a keyword directly followed by punctuation with no
+// item (e.g. "מחק!") isn't caught here and falls through to being added as
+// a literal item - low-probability, self-evidently wrong if it ever
+// happens, and easy to delete from the list, so not worth the added
+// complexity of a punctuation-stripping check.
 const BARE_REMOVE_PATTERN = /^(?:תוריד|הורד|הסר|מחק|תסיר)(?:\s+את)?\s*$/u;
 
 export function parseRuleBased(message: string): RuleParseResult | null {
