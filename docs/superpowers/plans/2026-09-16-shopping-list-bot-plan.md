@@ -402,6 +402,11 @@ describe('parseRuleBased', () => {
   it('defers to AI when a removal message has an ambiguous trailing line', () => {
     expect(parseRuleBased('מחק חלב\nהאם בסדר?')).toBeNull();
   });
+
+  it('defers to AI for a bare removal keyword with nothing to remove', () => {
+    expect(parseRuleBased('מחק')).toBeNull();
+    expect(parseRuleBased('מחק את')).toBeNull();
+  });
 });
 ```
 
@@ -431,6 +436,10 @@ const REMOVE_PATTERN = /^(?:תוריד|הורד|הסר|מחק|תסיר)\s+(?:א�
 // Hebrew letters, so a keyword boundary has to be spelled out as
 // whitespace-or-end instead of \b.
 const AMBIGUOUS_START_PATTERN = /[?]|^(?:אין|צריך|כדאי|נגמר)(?:\s|$)/u;
+// A removal keyword with nothing to remove (e.g. just "מחק", possibly
+// followed by the bare object marker "את") is ambiguous, not an add of the
+// keyword itself - defer to the AI fallback rather than guessing.
+const BARE_REMOVE_PATTERN = /^(?:תוריד|הורד|הסר|מחק|תסיר)(?:\s+את)?\s*$/u;
 
 export function parseRuleBased(message: string): RuleParseResult | null {
   const trimmed = message.trim();
@@ -442,6 +451,10 @@ export function parseRuleBased(message: string): RuleParseResult | null {
   // question or ambiguous phrase on a later line get swallowed in as a
   // literal item instead of deferring to the AI fallback.
   if (AMBIGUOUS_START_PATTERN.test(trimmed)) {
+    return null;
+  }
+
+  if (BARE_REMOVE_PATTERN.test(trimmed)) {
     return null;
   }
 
@@ -459,7 +472,7 @@ export function parseRuleBased(message: string): RuleParseResult | null {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm --prefix functions run test -- ruleParser.test.ts`
-Expected: PASS (10 tests)
+Expected: PASS (11 tests)
 
 - [ ] **Step 5: Commit**
 

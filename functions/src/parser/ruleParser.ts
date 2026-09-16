@@ -16,6 +16,10 @@ const REMOVE_PATTERN = /^(?:תוריד|הורד|הסר|מחק|תסיר)\s+(?:א�
 // Hebrew letters, so a keyword boundary has to be spelled out as
 // whitespace-or-end instead of \b.
 const AMBIGUOUS_START_PATTERN = /[?]|^(?:אין|צריך|כדאי|נגמר)(?:\s|$)/u;
+// A removal keyword with nothing to remove (e.g. just "מחק", possibly
+// followed by the bare object marker "את") is ambiguous, not an add of the
+// keyword itself - defer to the AI fallback rather than guessing.
+const BARE_REMOVE_PATTERN = /^(?:תוריד|הורד|הסר|מחק|תסיר)(?:\s+את)?\s*$/u;
 
 export function parseRuleBased(message: string): RuleParseResult | null {
   const trimmed = message.trim();
@@ -27,6 +31,10 @@ export function parseRuleBased(message: string): RuleParseResult | null {
   // question or ambiguous phrase on a later line get swallowed in as a
   // literal item instead of deferring to the AI fallback.
   if (AMBIGUOUS_START_PATTERN.test(trimmed)) {
+    return null;
+  }
+
+  if (BARE_REMOVE_PATTERN.test(trimmed)) {
     return null;
   }
 

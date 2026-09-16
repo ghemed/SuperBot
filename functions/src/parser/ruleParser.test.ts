@@ -49,4 +49,9 @@ describe('parseRuleBased', () => {
   it('defers to AI when a removal message has an ambiguous trailing line', () => {
     expect(parseRuleBased('מחק חלב\nהאם בסדר?')).toBeNull();
   });
+
+  it('defers to AI for a bare removal keyword with nothing to remove', () => {
+    expect(parseRuleBased('מחק')).toBeNull();
+    expect(parseRuleBased('מחק את')).toBeNull();
+  });
 });
