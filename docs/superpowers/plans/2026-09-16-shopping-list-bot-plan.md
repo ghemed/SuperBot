@@ -293,6 +293,11 @@ describe('splitItems', () => {
   it('does not split a single word that happens to start with vav', () => {
     expect(splitItems('וופלים')).toEqual(['וופלים']);
   });
+
+  it('does not corrupt a double-vav loanword when it is not the first item', () => {
+    expect(splitItems('חלב, וופלים')).toEqual(['חלב', 'וופלים']);
+    expect(splitItems('חלב וופלים')).toEqual(['חלב', 'וופלים']);
+  });
 });
 ```
 
@@ -305,10 +310,19 @@ Expected: FAIL - `Cannot find module './splitItems'`
 
 ```typescript
 // functions/src/parser/splitItems.ts
+// A word boundary splits either on a single vav directly followed by a
+// non-vav Hebrew letter (the conjunction "ו", "and" - consumed, so "ולחם"
+// becomes "לחם"), or on whitespace directly before a double vav ("וו",
+// consumed only up to the space) - Hebrew loanwords spell an initial "w"
+// sound with a double vav (e.g. וופלים/waffles), and that must not be
+// mistaken for "ו" + a word starting with vav (e.g. ורד/rose - which is
+// genuinely ambiguous with the conjunction and left to the AI fallback).
+const ITEM_SEPARATOR = /\s+ו(?=[א-הז-ת])|\s+(?=וו)/;
+
 export function splitItems(text: string): string[] {
   return text
     .split(/[,\n]/)
-    .flatMap((chunk) => chunk.split(/\s+ו(?=[א-ת])/))
+    .flatMap((chunk) => chunk.split(ITEM_SEPARATOR))
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 }
@@ -317,7 +331,7 @@ export function splitItems(text: string): string[] {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm --prefix functions run test -- splitItems.test.ts`
-Expected: PASS (7 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: Commit**
 
