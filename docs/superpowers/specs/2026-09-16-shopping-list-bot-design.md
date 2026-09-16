@@ -78,7 +78,7 @@ households/main/trips/{tripId}
 
 households/main/purchaseHistory/{normalizedName}
   name: string
-  purchaseDates: [timestamp, ...]        # capped to last 8, used for recurring detection
+  purchases: [{ tripId, date }, ...]     # capped to last 8, used for recurring detection
 ```
 
 ## Message parsing (hybrid)
@@ -143,14 +143,15 @@ entry opens its own (now read-only) trip page.
 
 ## Recurring-item detection
 
-On trip completion, for every purchased item: append today's date to
-`purchaseHistory/{normalizedName}.purchaseDates` (cap at last 8 entries).
-An item is suggested as "recurring" at the next trip's finish step if
+On trip completion, for every purchased item: append `{ tripId, date }` to
+`purchaseHistory/{normalizedName}.purchases` (cap at last 8 entries). An
+item is suggested as "recurring" at the next trip's finish step if
 either:
 - it's manually pinned (`items.recurring == true`), or
-- it was purchased in at least 3 of the last 4 *completed trips*
-  (trip-count-based, not calendar-week-based, so skipping a week doesn't
-  break detection).
+- its purchase history's `tripId`s include at least 3 of the household's
+  4 most-recently-completed trips (trip-count-based, not
+  calendar-week-based, so skipping a week doesn't break detection - and
+  fewer than 4 completed trips so far simply means no item qualifies yet).
 
 ## Auth & security
 
