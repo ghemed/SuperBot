@@ -52,6 +52,13 @@ watchItems((items) => {
   for (const item of items) {
     listEl.appendChild(itemRow(item));
   }
+}).catch((error) => {
+  // watchItems/watchActiveTrip are async (they await ensureSignedIn()
+  // first) - an unhandled rejection here (e.g. a real auth/connection
+  // failure, not just today's placeholder Firebase config) would
+  // otherwise surface only as a browser console error with the list
+  // silently stuck empty and no sign anything went wrong.
+  console.error("Failed to load the shopping list:", error);
 });
 
 watchActiveTrip((trip) => {
@@ -61,6 +68,8 @@ watchActiveTrip((trip) => {
   } else {
     bannerEl.classList.add("hidden");
   }
+}).catch((error) => {
+  console.error("Failed to check for an active trip:", error);
 });
 
 addForm.addEventListener("submit", (e) => {
