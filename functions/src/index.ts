@@ -37,7 +37,11 @@ export const telegramWebhook = onRequest(
       // same failing update rather than recovering anything - it can even
       // make things worse (e.g. a delayed reply arriving after a retry's
       // reply, out of order). Cloud Functions logs still capture `error`.
-      console.error('handleUpdate failed', error);
+      console.error('handleUpdate failed', {
+        chatId: req.body?.message?.chat?.id,
+        text: req.body?.message?.text,
+        error,
+      });
     }
     res.status(200).send('ok');
   }
