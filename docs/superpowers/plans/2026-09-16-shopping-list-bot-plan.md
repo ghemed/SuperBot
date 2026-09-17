@@ -49,7 +49,7 @@ Most of these are one-time setup, needed before Task 11 (deploy) and Task 13 (fr
   "scripts": {
     "build": "tsc",
     "test": "vitest run src/parser",
-    "test:emulator": "vitest run src/firestore src/__tests__ src/bot",
+    "test:emulator": "vitest run src/firestore src/__tests__ src/bot --no-file-parallelism",
     "deploy": "npm run build && firebase deploy --only functions"
   },
   "dependencies": {
@@ -1134,6 +1134,16 @@ git commit -m "Add Firestore item and trip helpers"
 ---
 
 ## Task 9: Firestore security rules
+
+This test's `beforeEach` calls `testEnv.clearFirestore()`, which wipes the
+*entire* emulator database for the project - not just this file's own data.
+Vitest runs test files in parallel by default, so without a change to the
+`test:emulator` script (below), this file's `clearFirestore()` calls would
+intermittently wipe out data that Task 8's `items.test.ts`/`trips.test.ts`
+are mid-assertion on when all three files run in the same emulator session.
+`functions/package.json`'s `test:emulator` script needs
+`--no-file-parallelism` appended (already reflected in Task 1's script above)
+to force these emulator-dependent files to run one at a time.
 
 **Files:**
 - Modify: `firestore.rules`
