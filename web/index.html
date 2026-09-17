@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>העגלה שלנו</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="phone">
+  <a id="trip-banner" class="banner hidden" href="#">
+    <span>יש טיול קנייה פעיל - המשיכו כאן</span>
+    <span>›</span>
+  </a>
+  <div class="card">
+    <header>
+      <div class="eyebrow">רשימת קניות משותפת</div>
+      <h1>העגלה שלנו</h1>
+      <div class="meta"><span id="count">0</span> פריטים</div>
+    </header>
+    <ul class="list" id="list"></ul>
+    <p class="empty hidden" id="empty">הרשימה ריקה - תוסיפו פריט למטה, או פשוט תכתבו לבוט בטלגרם</p>
+    <form class="addbar" id="add-form">
+      <input id="add-input" type="text" placeholder="פריט חדש..." autocomplete="off" />
+      <button class="btn btn-primary" type="submit">הוסף</button>
+    </form>
+  </div>
+  <div class="note"><a href="history.html">היסטוריית קניות ›</a></div>
+</div>
+<script type="module" src="js/list-page.js"></script>
+</body>
+</html>
