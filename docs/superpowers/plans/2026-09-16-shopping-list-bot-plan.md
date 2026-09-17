@@ -1200,6 +1200,35 @@ describe('firestore rules', () => {
     const anonDb = testEnv.unauthenticatedContext().firestore();
     await assertFails(getDoc(doc(anonDb, 'households/main/items/x')));
   });
+
+  // Every household collection shares the same `{collection}/{docId}`
+  // wildcard rule - looping over all three catches a future rule change
+  // that accidentally special-cases one of them, not just "items".
+  const HOUSEHOLD_COLLECTIONS = ['items', 'trips', 'purchaseHistory'];
+
+  it.each(HOUSEHOLD_COLLECTIONS)('lets a household member write to %s', async (collection) => {
+    const memberDb = testEnv.authenticatedContext('uid-a').firestore();
+    await assertSucceeds(setDoc(doc(memberDb, `households/main/${collection}/x`), { test: true }));
+  });
+
+  it.each(HOUSEHOLD_COLLECTIONS)('blocks a non-member from writing to %s', async (collection) => {
+    const strangerDb = testEnv.authenticatedContext('uid-z').firestore();
+    await assertFails(setDoc(doc(strangerDb, `households/main/${collection}/x`), { test: true }));
+  });
+
+  it('blocks an unauthenticated write', async () => {
+    const anonDb = testEnv.unauthenticatedContext().firestore();
+    await assertFails(setDoc(doc(anonDb, 'households/main/items/x'), { test: true }));
+  });
+
+  it('blocks a household member from writing to households/main itself', async () => {
+    // memberUids is set once manually (console/Admin SDK) - never from the
+    // app, even by a legitimate member.
+    const memberDb = testEnv.authenticatedContext('uid-a').firestore();
+    await assertFails(
+      setDoc(doc(memberDb, 'households/main'), { memberUids: ['uid-a', 'uid-z'] })
+    );
+  });
 });
 ```
 
@@ -1237,7 +1266,7 @@ service cloud.firestore {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `firebase emulators:exec --project=demo-superbot --only firestore "npm --prefix functions run test:emulator"`
-Expected: PASS (all tests, including the 3 new rules tests)
+Expected: PASS (all tests, including the 11 new rules tests: 3 read + 8 write)
 
 - [ ] **Step 5: Commit**
 
