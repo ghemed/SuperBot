@@ -1711,6 +1711,14 @@ export async function watchItems(onChange) {
   return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
 }
 
+// Known accepted limitation: unlike the bot's server-side addItems
+// (functions/src/firestore/items.ts, which runs its duplicate-check-then-
+// write inside a transaction), addItem/renameItem here do no dedup at all -
+// two items can end up with the same normalizedName (e.g. renaming "Milk"
+// to "milk", or to another item's exact name). Low-impact for a two-person
+// list (an obvious duplicate row, not data loss, and trivially fixed with
+// the delete button) and left this way rather than rushing a UX decision
+// for what a rejected/merged rename should do.
 export async function addItem(name) {
   await ensureSignedIn();
   await addDoc(itemsCol, {
@@ -1983,6 +1991,14 @@ const bannerEl = document.getElementById("trip-banner");
 const addForm = document.getElementById("add-form");
 const addInput = document.getElementById("add-input");
 
+// addItem/renameItem/setRecurring/deleteItem are all async (they await
+// ensureSignedIn() first, same as watchItems/watchActiveTrip above) - an
+// unhandled rejection here would silently swallow a failed write while the
+// UI has already acted as if it succeeded (input cleared, row removed).
+function logFailure(action) {
+  return (error) => console.error(`Failed to ${action}:`, error);
+}
+
 function itemRow(item) {
   const li = document.createElement("li");
   li.className = "row";
@@ -1998,7 +2014,7 @@ function itemRow(item) {
   nameInput.addEventListener("change", () => {
     const value = nameInput.value.trim();
     if (value && value !== item.name) {
-      renameItem(item.id, value);
+      renameItem(item.id, value).catch(logFailure("rename the item"));
     } else {
       nameInput.value = item.name;
     }
@@ -2008,14 +2024,18 @@ function itemRow(item) {
   tag.type = "button";
   tag.className = "tag" + (item.recurring ? "" : " off");
   tag.textContent = "קבוע";
-  tag.addEventListener("click", () => setRecurring(item.id, !item.recurring));
+  tag.addEventListener("click", () => {
+    setRecurring(item.id, !item.recurring).catch(logFailure("update the item"));
+  });
 
   const del = document.createElement("button");
   del.type = "button";
   del.className = "icon-btn";
   del.setAttribute("aria-label", "מחק פריט");
   del.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>';
-  del.addEventListener("click", () => deleteItem(item.id));
+  del.addEventListener("click", () => {
+    deleteItem(item.id).catch(logFailure("delete the item"));
+  });
 
   li.append(box, nameInput, tag, del);
   return li;
@@ -2052,7 +2072,7 @@ addForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const name = addInput.value.trim();
   if (!name) return;
-  addItem(name);
+  addItem(name).catch(logFailure("add the item"));
   addInput.value = "";
 });
 ```

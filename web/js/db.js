@@ -26,6 +26,14 @@ export async function watchItems(onChange) {
   return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
 }
 
+// Known accepted limitation: unlike the bot's server-side addItems
+// (functions/src/firestore/items.ts, which runs its duplicate-check-then-
+// write inside a transaction), addItem/renameItem here do no dedup at all -
+// two items can end up with the same normalizedName (e.g. renaming "Milk"
+// to "milk", or to another item's exact name). Low-impact for a two-person
+// list (an obvious duplicate row, not data loss, and trivially fixed with
+// the delete button) and left this way rather than rushing a UX decision
+// for what a rejected/merged rename should do.
 export async function addItem(name) {
   await ensureSignedIn();
   await addDoc(itemsCol, {
