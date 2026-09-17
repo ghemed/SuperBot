@@ -1907,6 +1907,7 @@ h1 { font-family: 'Frank Ruhl Libre', serif; font-weight: 700; font-size: 26px; 
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:hover { background: var(--accent-strong); }
 .btn-ghost { background: transparent; color: var(--text-muted); font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: default; }
 footer { padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .banner { margin: 14px 16px 0; background: var(--accent-tint); color: var(--accent-strong); border-radius: 12px; padding: 11px 14px; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; text-decoration: none; }
 .hidden { display: none !important; }
@@ -2176,6 +2177,14 @@ const confirmBtn = document.getElementById("confirm-btn");
 const backBtn = document.getElementById("back-btn");
 const doneSummary = document.getElementById("done-summary");
 
+// Matches the convention established in list-page.js: watchItems/watchTrip/
+// toggleChecked/getRecurringCandidates/finishTrip are all async (they await
+// ensureSignedIn() first), so an unhandled rejection would silently leave
+// the UI in a state that never actually happened.
+function logFailure(action) {
+  return (error) => console.error(`Failed to ${action}:`, error);
+}
+
 let currentItems = [];
 let currentTrip = null;
 let checkedItemIds = new Set();
@@ -2184,7 +2193,7 @@ let keepItemIds = new Set();
 watchItems((items) => {
   currentItems = items;
   render();
-});
+}).catch(logFailure("load the shopping list"));
 
 watchTrip(tripId, (trip) => {
   currentTrip = trip;
@@ -2196,22 +2205,72 @@ watchTrip(tripId, (trip) => {
     }
   }
   render();
-});
+}).catch(logFailure("load the shopping trip"));
+
+// Builds each item row via DOM nodes/textContent rather than an innerHTML
+// template string - item.name is free text from either household member
+// (or, in principle, anyone able to write to Firestore), and interpolating
+// it into innerHTML would let a crafted name (e.g. containing an <img
+// onerror=...> tag) execute as script for anyone viewing this page.
+function itemRow(item) {
+  const li = document.createElement("li");
+  li.className = "row" + (checkedItemIds.has(item.id) ? " checked" : "");
+
+  const box = document.createElement("div");
+  box.className = "box";
+  box.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>';
+
+  const nameSpan = document.createElement("span");
+  nameSpan.className = "name";
+  nameSpan.style.cursor = "pointer";
+  nameSpan.textContent = item.name;
+
+  li.append(box, nameSpan);
+  li.addEventListener("click", () => {
+    toggleChecked(tripId, item.id, !checkedItemIds.has(item.id)).catch(
+      logFailure("update the checked item")
+    );
+  });
+  return li;
+}
 
 function render() {
   if (!currentTrip || currentTrip.status !== "active") return;
   tripMeta.textContent = `${currentItems.length} פריטים ברשימה`;
   listEl.innerHTML = "";
   for (const item of currentItems) {
-    const li = document.createElement("li");
-    li.className = "row" + (checkedItemIds.has(item.id) ? " checked" : "");
-    li.innerHTML = `
-      <div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
-      <span class="name" style="cursor:pointer;">${item.name}</span>
-    `;
-    li.addEventListener("click", () => toggleChecked(tripId, item.id, !checkedItemIds.has(item.id)));
-    listEl.appendChild(li);
+    listEl.appendChild(itemRow(item));
   }
+}
+
+function suggestionCard(item, isCandidate) {
+  const row = document.createElement("div");
+  row.className = "suggest-card";
+
+  const info = document.createElement("div");
+  info.className = "info";
+  const nameDiv = document.createElement("div");
+  nameDiv.className = "name";
+  nameDiv.textContent = item.name;
+  const whyDiv = document.createElement("div");
+  whyDiv.className = "why";
+  whyDiv.textContent = isCandidate ? "נקנה לרוב מדי קנייה" : "לא זוהה כפריט קבוע";
+  info.append(nameDiv, whyDiv);
+
+  const switchBtn = document.createElement("button");
+  switchBtn.type = "button";
+  switchBtn.className = "switch" + (isCandidate ? " on" : "");
+  switchBtn.addEventListener("click", () => {
+    switchBtn.classList.toggle("on");
+    if (switchBtn.classList.contains("on")) {
+      keepItemIds.add(item.id);
+    } else {
+      keepItemIds.delete(item.id);
+    }
+  });
+
+  row.append(info, switchBtn);
+  return row;
 }
 
 finishBtn.addEventListener("click", async () => {
@@ -2220,35 +2279,30 @@ finishBtn.addEventListener("click", async () => {
     alert("לא סומן אף פריט");
     return;
   }
-  const candidates = await getRecurringCandidates(checked);
-  keepItemIds = new Set(candidates.map((c) => c.id));
 
-  suggestionsEl.innerHTML = "";
-  for (const item of checked) {
-    const isCandidate = candidates.some((c) => c.id === item.id);
-    const row = document.createElement("div");
-    row.className = "suggest-card";
-    row.innerHTML = `
-      <div class="info">
-        <div class="name">${item.name}</div>
-        <div class="why">${isCandidate ? "נקנה לרוב מדי קנייה" : "לא זוהה כפריט קבוע"}</div>
-      </div>
-      <button type="button" class="switch${isCandidate ? " on" : ""}"></button>
-    `;
-    const switchBtn = row.querySelector(".switch");
-    switchBtn.addEventListener("click", () => {
-      switchBtn.classList.toggle("on");
-      if (switchBtn.classList.contains("on")) {
-        keepItemIds.add(item.id);
-      } else {
-        keepItemIds.delete(item.id);
-      }
-    });
-    suggestionsEl.appendChild(row);
+  // Disabled for the duration of the async call, not just to prevent a
+  // wasted duplicate Firestore read on a fast double-tap, but because
+  // without this a second click could re-enter this handler before the
+  // first one has switched screens.
+  finishBtn.disabled = true;
+  try {
+    const candidates = await getRecurringCandidates(checked);
+    keepItemIds = new Set(candidates.map((c) => c.id));
+
+    suggestionsEl.innerHTML = "";
+    for (const item of checked) {
+      const isCandidate = candidates.some((c) => c.id === item.id);
+      suggestionsEl.appendChild(suggestionCard(item, isCandidate));
+    }
+
+    screenShopping.classList.add("hidden");
+    screenRecap.classList.remove("hidden");
+  } catch (error) {
+    logFailure("prepare the finish-shopping summary")(error);
+    alert("קרתה שגיאה, נסו שוב");
+  } finally {
+    finishBtn.disabled = false;
   }
-
-  screenShopping.classList.add("hidden");
-  screenRecap.classList.remove("hidden");
 });
 
 backBtn.addEventListener("click", () => {
@@ -2258,7 +2312,22 @@ backBtn.addEventListener("click", () => {
 
 confirmBtn.addEventListener("click", async () => {
   const checked = currentItems.filter((i) => checkedItemIds.has(i.id));
-  await finishTrip(tripId, checked, keepItemIds);
+  // Stays disabled on success (rather than re-enabling in a `finally`) -
+  // the screen is about to transition to screen-done via watchTrip's own
+  // listener once the transaction commits, so there's nothing left for
+  // this button to do; only re-enable it if the call actually failed and
+  // the user needs to retry from this same screen. finishTrip itself is
+  // already idempotent (Task 12's transaction re-checks trip status), so
+  // this is about giving the user feedback and avoiding a wasted duplicate
+  // call, not about data safety.
+  confirmBtn.disabled = true;
+  try {
+    await finishTrip(tripId, checked, keepItemIds);
+  } catch (error) {
+    logFailure("update the list after finishing the trip")(error);
+    alert("קרתה שגיאה בעדכון הרשימה, נסו שוב");
+    confirmBtn.disabled = false;
+  }
 });
 
 function showDone(trip) {
@@ -2322,6 +2391,10 @@ const listEl = document.getElementById("list");
 const emptyEl = document.getElementById("empty");
 const formatter = new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", year: "numeric" });
 
+function logFailure(action) {
+  return (error) => console.error(`Failed to ${action}:`, error);
+}
+
 watchHistory((trips) => {
   listEl.innerHTML = "";
   emptyEl.classList.toggle("hidden", trips.length > 0);
@@ -2329,12 +2402,24 @@ watchHistory((trips) => {
     const a = document.createElement("a");
     a.className = "history-row";
     a.href = `trip.html?id=${trip.id}`;
-    const date = formatter.format(new Date(trip.completedAt));
+
+    const dateDiv = document.createElement("div");
+    dateDiv.className = "date";
+    dateDiv.textContent = formatter.format(new Date(trip.completedAt));
+
+    // textContent, not innerHTML: purchased item names are free text
+    // (typed by either household member), so interpolating them into
+    // markup would let a crafted name execute as script for anyone
+    // viewing this page - same reasoning as trip-page.js's item rows.
+    const summaryDiv = document.createElement("div");
+    summaryDiv.className = "summary";
     const names = (trip.purchased || []).map((p) => p.name).join(", ");
-    a.innerHTML = `<div class="date">${date}</div><div class="summary">${names || "אין פריטים"}</div>`;
+    summaryDiv.textContent = names || "אין פריטים";
+
+    a.append(dateDiv, summaryDiv);
     listEl.appendChild(a);
   }
-});
+}).catch(logFailure("load the shopping history"));
 ```
 
 - [ ] **Step 3: Commit**
