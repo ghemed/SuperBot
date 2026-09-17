@@ -30,6 +30,12 @@ let currentItems = [];
 let currentTrip = null;
 let checkedItemIds = new Set();
 let keepItemIds = new Set();
+// Frozen at the moment "סיימתי לקנות" is clicked, so confirmBtn finishes
+// exactly the item set the user reviewed on screen-recap - not whatever
+// checkedItemIds happens to be by the time they tap confirm, which can
+// have changed if the other household member is still checking off items
+// on their own device while this one sits on the recap screen.
+let recapCheckedItems = [];
 
 watchItems((items) => {
   currentItems = items;
@@ -128,6 +134,15 @@ finishBtn.addEventListener("click", async () => {
   finishBtn.disabled = true;
   try {
     const candidates = await getRecurringCandidates(checked);
+
+    // Re-check status after the await: the trip may have been finished
+    // from another device while this call was in flight (e.g. the other
+    // household member finishing it themselves) - watchTrip's own listener
+    // will already have shown screen-done in that case, and resuming here
+    // would resurrect screen-recap on top of it.
+    if (!currentTrip || currentTrip.status !== "active") return;
+
+    recapCheckedItems = checked;
     keepItemIds = new Set(candidates.map((c) => c.id));
 
     suggestionsEl.innerHTML = "";
@@ -152,7 +167,13 @@ backBtn.addEventListener("click", () => {
 });
 
 confirmBtn.addEventListener("click", async () => {
-  const checked = currentItems.filter((i) => checkedItemIds.has(i.id));
+  // Reuses recapCheckedItems (frozen when "סיימתי לקנות" was clicked)
+  // rather than re-deriving from the live checkedItemIds/currentItems -
+  // those can have changed while the user was reviewing screen-recap (the
+  // other household member checking/unchecking items on their own
+  // device), which would otherwise let confirmBtn silently finish a
+  // different item set than the one actually shown and reviewed.
+  //
   // Stays disabled on success (rather than re-enabling in a `finally`) -
   // the screen is about to transition to screen-done via watchTrip's own
   // listener once the transaction commits, so there's nothing left for
@@ -163,7 +184,7 @@ confirmBtn.addEventListener("click", async () => {
   // call, not about data safety.
   confirmBtn.disabled = true;
   try {
-    await finishTrip(tripId, checked, keepItemIds);
+    await finishTrip(tripId, recapCheckedItems, keepItemIds);
   } catch (error) {
     logFailure("update the list after finishing the trip")(error);
     alert("קרתה שגיאה בעדכון הרשימה, נסו שוב");
