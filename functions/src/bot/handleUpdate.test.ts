@@ -67,4 +67,19 @@ describe('handleUpdate', () => {
     expect(aiParse).toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(111, expect.stringContaining('לא הבנתי'));
   });
+
+  it('does not throw when the update has no message (e.g. a malformed body)', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const aiParse = vi.fn();
+
+    await expect(
+      handleUpdate(undefined as unknown as Parameters<typeof handleUpdate>[0], {
+        db,
+        sendMessage,
+        aiParse,
+        pagesBaseUrl: 'https://example.github.io/superbot',
+      })
+    ).resolves.toBeUndefined();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
 });

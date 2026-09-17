@@ -14,7 +14,10 @@ export interface HandleUpdateDeps {
 }
 
 export async function handleUpdate(update: TelegramUpdate, deps: HandleUpdateDeps): Promise<void> {
-  const message = update.message;
+  // Optional-chained: a malformed/empty webhook body (no Content-Type,
+  // a bodyless ping, a manual test request) arrives here as `undefined`,
+  // not a well-formed TelegramUpdate - `update.message` would throw.
+  const message = update?.message;
   if (!message?.text) return;
 
   const chatId = message.chat.id;

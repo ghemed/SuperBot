@@ -1390,6 +1390,21 @@ describe('handleUpdate', () => {
     expect(aiParse).toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(111, expect.stringContaining('לא הבנתי'));
   });
+
+  it('does not throw when the update has no message (e.g. a malformed body)', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const aiParse = vi.fn();
+
+    await expect(
+      handleUpdate(undefined as unknown as Parameters<typeof handleUpdate>[0], {
+        db,
+        sendMessage,
+        aiParse,
+        pagesBaseUrl: 'https://example.github.io/superbot',
+      })
+    ).resolves.toBeUndefined();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
 });
 ```
 
@@ -1417,7 +1432,10 @@ export interface HandleUpdateDeps {
 }
 
 export async function handleUpdate(update: TelegramUpdate, deps: HandleUpdateDeps): Promise<void> {
-  const message = update.message;
+  // Optional-chained: a malformed/empty webhook body (no Content-Type,
+  // a bodyless ping, a manual test request) arrives here as `undefined`,
+  // not a well-formed TelegramUpdate - `update.message` would throw.
+  const message = update?.message;
   if (!message?.text) return;
 
   const chatId = message.chat.id;
@@ -1458,7 +1476,7 @@ export async function handleUpdate(update: TelegramUpdate, deps: HandleUpdateDep
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `firebase emulators:exec --project=demo-superbot --only firestore "npm --prefix functions run test:emulator"`
-Expected: PASS (all emulator tests, 12 total across Tasks 8-10)
+Expected: PASS (all emulator tests, 23 total: 19 from Tasks 8-9 + 4 new handleUpdate tests)
 
 - [ ] **Step 6: Wire the Cloud Function entry point (no test - composition root)**
 
@@ -1493,7 +1511,17 @@ export const telegramWebhook = onRequest(
     const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
     const aiParse = createClaudeParser((args) => anthropic.messages.create(args));
 
-    await handleUpdate(req.body, { db, sendMessage, aiParse, pagesBaseUrl: PAGES_BASE_URL });
+    try {
+      await handleUpdate(req.body, { db, sendMessage, aiParse, pagesBaseUrl: PAGES_BASE_URL });
+    } catch (error) {
+      // Always acknowledge with 200 regardless of failure - Telegram
+      // retries a non-2xx webhook response, and during a real outage
+      // (Telegram API down, Firestore hiccup) a retry just re-runs the
+      // same failing update rather than recovering anything - it can even
+      // make things worse (e.g. a delayed reply arriving after a retry's
+      // reply, out of order). Cloud Functions logs still capture `error`.
+      console.error('handleUpdate failed', error);
+    }
     res.status(200).send('ok');
   }
 );

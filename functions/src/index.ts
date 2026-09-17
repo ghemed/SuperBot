@@ -28,7 +28,17 @@ export const telegramWebhook = onRequest(
     const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
     const aiParse = createClaudeParser((args) => anthropic.messages.create(args));
 
-    await handleUpdate(req.body, { db, sendMessage, aiParse, pagesBaseUrl: PAGES_BASE_URL });
+    try {
+      await handleUpdate(req.body, { db, sendMessage, aiParse, pagesBaseUrl: PAGES_BASE_URL });
+    } catch (error) {
+      // Always acknowledge with 200 regardless of failure - Telegram
+      // retries a non-2xx webhook response, and during a real outage
+      // (Telegram API down, Firestore hiccup) a retry just re-runs the
+      // same failing update rather than recovering anything - it can even
+      // make things worse (e.g. a delayed reply arriving after a retry's
+      // reply, out of order). Cloud Functions logs still capture `error`.
+      console.error('handleUpdate failed', error);
+    }
     res.status(200).send('ok');
   }
 );
