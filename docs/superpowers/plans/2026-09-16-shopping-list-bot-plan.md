@@ -1664,6 +1664,14 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 
 export async function ensureSignedIn() {
+  // auth.currentUser is null until the SDK finishes restoring a persisted
+  // session from IndexedDB, which happens asynchronously AFTER getAuth()
+  // returns - reading currentUser before that resolves would see "null"
+  // even when a persisted anonymous session already exists, and mint a
+  // brand new anonymous UID instead of reusing it. Since firestore.rules
+  // allowlists exactly two fixed UIDs, a rotated UID locks that member out
+  // until someone manually re-adds the new UID in the console.
+  await auth.authStateReady();
   if (!auth.currentUser) {
     await signInAnonymously(auth);
   }
@@ -1681,12 +1689,21 @@ import { isRecurringCandidate } from "./recurring.js";
 import {
   collection, doc, addDoc, deleteDoc, updateDoc, getDoc, onSnapshot,
   query, orderBy, where, limit, arrayUnion, arrayRemove,
-  writeBatch, getDocs,
+  runTransaction, getDocs,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const itemsCol = collection(db, "households/main/items");
 const tripsCol = collection(db, "households/main/trips");
 const historyCol = collection(db, "households/main/purchaseHistory");
+
+// Firestore document IDs can't contain "/" (it's a path separator there,
+// not a literal character) or be exactly "." or "..". An item name is
+// free text ("1/2 kg", "חלב/שמנת"), so it can't be used as a doc ID
+// as-is - this escapes it into something always valid.
+function historyDocId(normalizedName) {
+  const escaped = normalizedName.replace(/\//g, "_");
+  return escaped === "." || escaped === ".." || escaped === "" ? `_${escaped}` : escaped;
+}
 
 export async function watchItems(onChange) {
   await ensureSignedIn();
@@ -1755,7 +1772,7 @@ export async function getRecurringCandidates(checkedItems) {
       continue;
     }
     if (recentTripIds.length < 4) continue;
-    const histSnap = await getDoc(doc(historyCol, item.normalizedName));
+    const histSnap = await getDoc(doc(historyCol, historyDocId(item.normalizedName)));
     if (!histSnap.exists()) continue;
     const purchases = histSnap.data().purchases || [];
     const itemTripIds = purchases.map((p) => p.tripId);
@@ -1766,41 +1783,52 @@ export async function getRecurringCandidates(checkedItems) {
 
 export async function finishTrip(tripId, checkedItems, keepItemIds) {
   await ensureSignedIn();
-  const batch = writeBatch(db);
-  const purchased = [];
-  const recurringDecisions = [];
+  const tripRef = doc(tripsCol, tripId);
 
-  for (const item of checkedItems) {
-    const kept = keepItemIds.has(item.id);
-    purchased.push({ itemId: item.id, name: item.name, price: null });
-    recurringDecisions.push({ name: item.name, kept });
-
-    batch.delete(doc(itemsCol, item.id));
-    if (kept) {
-      batch.set(doc(itemsCol), {
-        name: item.name,
-        normalizedName: item.normalizedName,
-        addedAt: Date.now(),
-        addedBy: "web",
-        recurring: true,
-      });
+  // A transaction (not a plain batch) so a double-tap of "finish" or a
+  // retry after a perceived timeout can't apply the same trip twice - the
+  // status check below makes a second call a no-op instead of appending a
+  // second purchase-history entry and creating a second "kept" item doc
+  // for the same underlying item.
+  await runTransaction(db, async (transaction) => {
+    const tripSnap = await transaction.get(tripRef);
+    if (!tripSnap.exists() || tripSnap.data().status !== "active") {
+      return;
     }
 
-    batch.set(
-      doc(historyCol, item.normalizedName),
-      { name: item.name, purchases: arrayUnion({ tripId, date: Date.now() }) },
-      { merge: true }
-    );
-  }
+    const purchased = [];
+    const recurringDecisions = [];
 
-  batch.update(doc(tripsCol, tripId), {
-    status: "completed",
-    completedAt: Date.now(),
-    purchased,
-    recurringDecisions,
+    for (const item of checkedItems) {
+      const kept = keepItemIds.has(item.id);
+      purchased.push({ itemId: item.id, name: item.name, price: null });
+      recurringDecisions.push({ name: item.name, kept });
+
+      transaction.delete(doc(itemsCol, item.id));
+      if (kept) {
+        transaction.set(doc(itemsCol), {
+          name: item.name,
+          normalizedName: item.normalizedName,
+          addedAt: Date.now(),
+          addedBy: "web",
+          recurring: true,
+        });
+      }
+
+      transaction.set(
+        doc(historyCol, historyDocId(item.normalizedName)),
+        { name: item.name, purchases: arrayUnion({ tripId, date: Date.now() }) },
+        { merge: true }
+      );
+    }
+
+    transaction.update(tripRef, {
+      status: "completed",
+      completedAt: Date.now(),
+      purchased,
+      recurringDecisions,
+    });
   });
-
-  await batch.commit();
 }
 
 export async function watchHistory(onChange) {

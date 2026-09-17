@@ -17,6 +17,14 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 
 export async function ensureSignedIn() {
+  // auth.currentUser is null until the SDK finishes restoring a persisted
+  // session from IndexedDB, which happens asynchronously AFTER getAuth()
+  // returns - reading currentUser before that resolves would see "null"
+  // even when a persisted anonymous session already exists, and mint a
+  // brand new anonymous UID instead of reusing it. Since firestore.rules
+  // allowlists exactly two fixed UIDs, a rotated UID locks that member out
+  // until someone manually re-adds the new UID in the console.
+  await auth.authStateReady();
   if (!auth.currentUser) {
     await signInAnonymously(auth);
   }
