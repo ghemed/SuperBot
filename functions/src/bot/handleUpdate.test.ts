@@ -49,7 +49,7 @@ describe('handleUpdate', () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       111,
-      expect.stringContaining('https://example.github.io/superbot/trip/')
+      expect.stringMatching(/^בהצלחה בסופר! 🛒\nhttps:\/\/example\.github\.io\/superbot\/trip\.html\?id=.+$/)
     );
   });
 

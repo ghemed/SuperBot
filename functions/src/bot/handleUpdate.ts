@@ -44,7 +44,7 @@ export async function handleUpdate(update: TelegramUpdate, deps: HandleUpdateDep
     }
     case 'at_store': {
       const trip = await trips.getOrCreateActiveTrip(deps.db, chatId);
-      await deps.sendMessage(chatId, `בהצלחה בסופר! 🛒\n${deps.pagesBaseUrl}/trip/${trip.id}`);
+      await deps.sendMessage(chatId, `בהצלחה בסופר! 🛒\n${deps.pagesBaseUrl}/trip.html?id=${trip.id}`);
       break;
     }
     case 'unclear': {
