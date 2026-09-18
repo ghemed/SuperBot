@@ -13,6 +13,10 @@ beforeEach(async () => {
     const docs = await db.collection(`households/main/${col}`).listDocuments();
     await Promise.all(docs.map((d) => d.delete()));
   }
+  // chatId 111 (this file's default in makeUpdate) is the whitelisted
+  // household member for every test below except the one that
+  // deliberately uses a different, non-member chatId.
+  await db.doc('households/main').set({ memberChatIds: [111], memberUids: [] });
 });
 
 function makeUpdate(text: string, chatId = 111) {
@@ -66,6 +70,23 @@ describe('handleUpdate', () => {
 
     expect(aiParse).toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(111, expect.stringContaining('לא הבנתי'));
+  });
+
+  it('silently ignores a message from a chat that is not a household member', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const aiParse = vi.fn();
+
+    await handleUpdate(makeUpdate('חלב', 999), {
+      db,
+      sendMessage,
+      aiParse,
+      pagesBaseUrl: 'https://example.github.io/superbot',
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(aiParse).not.toHaveBeenCalled();
+    const items = await db.collection('households/main/items').get();
+    expect(items.docs).toHaveLength(0);
   });
 
   it('does not throw when the update has no message (e.g. a malformed body)', async () => {

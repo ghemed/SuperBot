@@ -5,6 +5,7 @@ import type { SendTelegramMessage } from '../telegram/sendMessage';
 import type { TelegramUpdate } from '../telegram/types';
 import * as items from '../firestore/items';
 import * as trips from '../firestore/trips';
+import { isHouseholdMember } from '../firestore/household';
 
 export interface HandleUpdateDeps {
   db: Firestore;
@@ -21,6 +22,15 @@ export async function handleUpdate(update: TelegramUpdate, deps: HandleUpdateDep
   if (!message?.text) return;
 
   const chatId = message.chat.id;
+
+  // Stay silent for anyone outside the household allowlist - the webhook
+  // itself is protected by the secret token, and Firestore access is
+  // protected by firestore.rules, but neither of those stops a stranger
+  // who finds the bot's Telegram username from messaging it directly.
+  // Replying at all would confirm to them that this is a live bot worth
+  // probing further, so an unrecognized chat gets no response at all.
+  if (!(await isHouseholdMember(deps.db, chatId))) return;
+
   const parsed = await parseMessage(message.text, deps.aiParse);
 
   switch (parsed.action) {
