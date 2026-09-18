@@ -3,13 +3,16 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
+// This config is not secret - Firebase's own access model enforces
+// permissions via firestore.rules (memberUids allowlist), not by hiding
+// this key. Safe to have in a public repo.
 const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_FIREBASE_WEB_API_KEY",
-  authDomain: "REPLACE.firebaseapp.com",
-  projectId: "REPLACE",
-  storageBucket: "REPLACE.appspot.com",
-  messagingSenderId: "REPLACE",
-  appId: "REPLACE",
+  apiKey: "AIzaSyDSm_J7uNCE2e39jNC1FKiPBuCYH2aXpjs",
+  authDomain: "superbot-abedf.firebaseapp.com",
+  projectId: "superbot-abedf",
+  storageBucket: "superbot-abedf.firebasestorage.app",
+  messagingSenderId: "977649317417",
+  appId: "1:977649317417:web:ba83424817154846174e38",
 };
 
 const app = initializeApp(firebaseConfig);
