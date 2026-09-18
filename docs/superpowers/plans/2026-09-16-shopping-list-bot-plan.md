@@ -19,7 +19,7 @@ Most of these are one-time setup, needed before Task 11 (deploy) and Task 13 (fr
 - [ ] Create or pick a **Firebase project** at https://console.firebase.google.com → note the **project ID**.
 - [ ] In that project: enable **Firestore** (production mode, any region) and enable **Anonymous** sign-in under Authentication → Sign-in method.
 - [ ] Upgrade the project to the **Blaze (pay-as-you-go)** plan — required for Cloud Functions to call external APIs (Telegram, Anthropic), even within free-tier usage. Needs a payment method on the Google account.
-- [ ] Get an **Anthropic API key** from https://console.anthropic.com (billed separately from your Claude subscription; Haiku pricing at two-person message volume will be a few cents a month).
+- [ ] *(Optional, can be added later)* Get an **Anthropic API key** from https://console.anthropic.com (billed separately from your Claude subscription; Haiku pricing at two-person message volume will be a few cents a month) - powers the AI fallback for ambiguous phrasing like "אין לנו יותר קפה". Without it, every clear add/remove/show/at_store message still works; only ambiguous messages get "לא הבנתי" instead of being understood.
 - [ ] Run `firebase login` locally once (opens a browser to authorize the Firebase CLI).
 - [ ] Have ready: the local path to your existing `<username>.github.io` repo clone, and your GitHub Pages URL (e.g. `https://<username>.github.io/superbot`).
 
@@ -1496,6 +1496,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { handleUpdate } from './bot/handleUpdate';
 import { createTelegramSender } from './telegram/sendMessage';
 import { createClaudeParser } from './parser/claudeParser';
+import type { AiParse } from './parser/parseMessage';
 
 initializeApp();
 
@@ -1504,8 +1505,24 @@ const TELEGRAM_WEBHOOK_SECRET = defineSecret('TELEGRAM_WEBHOOK_SECRET');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const PAGES_BASE_URL = process.env.PAGES_BASE_URL ?? 'https://example.github.io/superbot';
 
+// The AI fallback is optional. When it's off (the default - flip it on by
+// setting ENABLE_AI_FALLBACK=true in functions/.env once ANTHROPIC_API_KEY
+// is set via `firebase functions:secrets:set`), any message the rule-based
+// engine can't confidently classify just gets "לא הבנתי" instead of an
+// AI-parsed answer. Every clear add/remove/show/at_store message is
+// already handled by the rule engine alone, with no AI involved either
+// way - this only affects ambiguous phrasing like "אין לנו יותר קפה".
+// Gating it like this also means ANTHROPIC_API_KEY never has to be bound
+// as a secret (and doesn't need to exist yet) unless this is turned on.
+const ENABLE_AI_FALLBACK = process.env.ENABLE_AI_FALLBACK === 'true';
+const noAiParse: AiParse = async () => ({ action: 'unclear', items: [] });
+
 export const telegramWebhook = onRequest(
-  { secrets: [TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, ANTHROPIC_API_KEY] },
+  {
+    secrets: ENABLE_AI_FALLBACK
+      ? [TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, ANTHROPIC_API_KEY]
+      : [TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET],
+  },
   async (req, res) => {
     if (req.get('X-Telegram-Bot-Api-Secret-Token') !== TELEGRAM_WEBHOOK_SECRET.value()) {
       res.status(401).send('unauthorized');
@@ -1514,8 +1531,9 @@ export const telegramWebhook = onRequest(
 
     const db = getFirestore();
     const sendMessage = createTelegramSender(TELEGRAM_BOT_TOKEN.value());
-    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
-    const aiParse = createClaudeParser((args) => anthropic.messages.create(args));
+    const aiParse: AiParse = ENABLE_AI_FALLBACK
+      ? createClaudeParser((args) => new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() }).messages.create(args))
+      : noAiParse;
 
     try {
       await handleUpdate(req.body, { db, sendMessage, aiParse, pagesBaseUrl: PAGES_BASE_URL });
@@ -1567,11 +1585,10 @@ Expected: `Now using project <your-project-id>`
 
 Also update `.firebaserc`'s placeholder to the same ID and commit that one-line change.
 
-- [ ] **Step 2: Set the three secrets** (each prompts for a value)
+- [ ] **Step 2: Set the required secrets** (each prompts for a value)
 
 ```bash
 firebase functions:secrets:set TELEGRAM_BOT_TOKEN
-firebase functions:secrets:set ANTHROPIC_API_KEY
 ```
 
 For the webhook secret, generate a random value first, then paste it when prompted:
@@ -1583,6 +1600,14 @@ firebase functions:secrets:set TELEGRAM_WEBHOOK_SECRET
 
 Save the generated webhook-secret value somewhere - you'll need it again in Step 4.
 
+`ANTHROPIC_API_KEY` is optional (see Task 10's `index.ts` - the AI
+fallback is gated behind `ENABLE_AI_FALLBACK`, off by default) and can be
+skipped entirely for now: without it, every clear add/remove/show/at_store
+message still works exactly the same, and only genuinely ambiguous
+phrasing gets "לא הבנתי" instead of an AI-parsed answer. To add it later:
+`firebase functions:secrets:set ANTHROPIC_API_KEY`, then add
+`ENABLE_AI_FALLBACK=true` to `functions/.env` (Step 3) and redeploy.
+
 - [ ] **Step 3: Set the pages base URL and deploy**
 
 Create `functions/.env`:
@@ -1590,6 +1615,9 @@ Create `functions/.env`:
 ```
 PAGES_BASE_URL=https://<your-username>.github.io/superbot
 ```
+
+(Optionally add `ENABLE_AI_FALLBACK=true` here too, once
+`ANTHROPIC_API_KEY` is set - otherwise leave it out.)
 
 Run: `npm --prefix functions run deploy`
 Expected: succeeds, output includes a function URL like
