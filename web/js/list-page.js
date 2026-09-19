@@ -119,10 +119,20 @@ function render() {
   emptyEl.classList.toggle("hidden", currentItems.length > 0);
   finishFooter.classList.toggle("hidden", tickedCount === 0);
 
-  const seen = new Set();
+  // Rows whose item is gone are removed BEFORE anything is placed. A stale row
+  // still in the DOM would sit where a current row is expected, so every row
+  // below it would be moved with insertBefore - and moving a row blurs a name
+  // being typed into it, silently dropping that edit.
+  const currentIds = new Set(currentItems.map((item) => item.id));
+  for (const [id, row] of rows) {
+    if (!currentIds.has(id)) {
+      row.li.remove();
+      rows.delete(id);
+    }
+  }
+
   let previous = null;
   for (const item of currentItems) {
-    seen.add(item.id);
     let row = rows.get(item.id);
     if (!row) {
       row = createRow();
@@ -130,16 +140,12 @@ function render() {
     }
     updateRow(row, item);
     // Keep the DOM order identical to currentItems by moving a row only when
-    // it is not already right after the previous one.
+    // it is not already right after the previous one. With the stale rows gone
+    // and the items ordered by their fixed addedAt, that is normally just a
+    // new row being added at the end, so existing rows are left where they are.
     const expectedPosition = previous ? previous.li.nextSibling : listEl.firstChild;
     if (row.li !== expectedPosition) listEl.insertBefore(row.li, expectedPosition);
     previous = row;
-  }
-  for (const [id, row] of rows) {
-    if (!seen.has(id)) {
-      row.li.remove();
-      rows.delete(id);
-    }
   }
 }
 
