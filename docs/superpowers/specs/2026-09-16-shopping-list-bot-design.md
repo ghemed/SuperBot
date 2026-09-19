@@ -1,5 +1,7 @@
 # SuperBot: Shared Shopping List Bot - Design
 
+> **Partly superseded:** the trip page, the "אני בסופר" flow and the `trips` data shape are replaced by [2026-09-19-unified-list-view-design.md](2026-09-19-unified-list-view-design.md).
+
 ## Overview
 
 A Telegram bot + companion web app that lets a couple maintain one shared
