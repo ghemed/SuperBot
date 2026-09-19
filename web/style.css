@@ -41,6 +41,8 @@ h1 { font-family: 'Frank Ruhl Libre', serif; font-weight: 700; font-size: 26px; 
 .box svg { width: 13px; height: 13px; opacity: 0; color: #fff; }
 .row.checked .box { background: var(--accent); border-color: var(--accent); }
 .row.checked .box svg { opacity: 1; }
+.item-icon { flex: none; width: 24px; text-align: center; font-size: 20px; line-height: 1; }
+.row.checked .item-icon { opacity: .45; }
 .name { flex: 1; min-width: 0; font-size: 16px; font-weight: 500; background: none; border: none; color: inherit; font-family: inherit; padding: 4px; border-radius: 6px; }
 .name:focus { outline: 2px solid var(--accent); background: var(--surface-alt); }
 .row.checked .name { color: var(--text-muted); text-decoration: line-through; }

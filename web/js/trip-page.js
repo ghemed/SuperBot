@@ -1,4 +1,5 @@
 import { watchItems, watchTrip, toggleChecked, getRecurringCandidates, finishTrip } from "./db.js";
+import { iconFor, withIcon } from "./product-icons.js";
 
 const params = new URLSearchParams(location.search);
 const tripId = params.get("id");
@@ -67,12 +68,17 @@ function itemRow(item) {
   box.className = "box";
   box.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>';
 
+  const icon = document.createElement("span");
+  icon.className = "item-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = iconFor(item.name);
+
   const nameSpan = document.createElement("span");
   nameSpan.className = "name";
   nameSpan.style.cursor = "pointer";
   nameSpan.textContent = item.name;
 
-  li.append(box, nameSpan);
+  li.append(box, icon, nameSpan);
   li.addEventListener("click", () => {
     toggleChecked(tripId, item.id, !checkedItemIds.has(item.id)).catch(
       logFailure("update the checked item")
@@ -98,7 +104,7 @@ function suggestionCard(item, isCandidate) {
   info.className = "info";
   const nameDiv = document.createElement("div");
   nameDiv.className = "name";
-  nameDiv.textContent = item.name;
+  nameDiv.textContent = withIcon(item.name);
   const whyDiv = document.createElement("div");
   whyDiv.className = "why";
   whyDiv.textContent = isCandidate ? "נקנה לרוב מדי קנייה" : "לא זוהה כפריט קבוע";

@@ -1,4 +1,5 @@
 import { watchItems, addItem, deleteItem, renameItem, setRecurring, watchActiveTrip } from "./db.js";
+import { iconFor } from "./product-icons.js";
 
 const listEl = document.getElementById("list");
 const emptyEl = document.getElementById("empty");
@@ -23,6 +24,13 @@ function itemRow(item) {
   box.className = "box";
   box.title = "מסומן ידנית רק בדף טיול קנייה";
   box.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>';
+
+  // A separate element, not part of the input's value: the icon is derived
+  // from the name for display only and must never end up in the saved name.
+  const icon = document.createElement("span");
+  icon.className = "item-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = iconFor(item.name);
 
   const nameInput = document.createElement("input");
   nameInput.className = "name";
@@ -53,7 +61,7 @@ function itemRow(item) {
     deleteItem(item.id).catch(logFailure("delete the item"));
   });
 
-  li.append(box, nameInput, tag, del);
+  li.append(box, icon, nameInput, tag, del);
   return li;
 }
 

@@ -35,9 +35,58 @@ describe('handleUpdate', () => {
       pagesBaseUrl: 'https://example.github.io/superbot',
     });
 
-    expect(sendMessage).toHaveBeenCalledWith(111, expect.stringContaining('חלב'));
+    expect(sendMessage).toHaveBeenCalledWith(111, 'נוסף: 🥛 חלב');
     const items = await db.collection('households/main/items').get();
+    // The icon is display-only - the stored name must stay exactly as typed.
     expect(items.docs.map((d) => d.data().name)).toEqual(['חלב']);
+  });
+
+  it('puts an icon before each item when several are added at once', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+
+    await handleUpdate(makeUpdate('חלב, עגבניות, דבר מוזר'), {
+      db,
+      sendMessage,
+      aiParse: vi.fn(),
+      pagesBaseUrl: 'https://example.github.io/superbot',
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(111, 'נוסף: 🥛 חלב, 🍅 עגבניות, 🛒 דבר מוזר');
+  });
+
+  it('puts an icon before the item in the removal confirmation', async () => {
+    await db.collection('households/main/items').add({
+      name: 'חלב', normalizedName: 'חלב', addedAt: 1, addedBy: 111, recurring: false,
+    });
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+
+    await handleUpdate(makeUpdate('הסר חלב'), {
+      db,
+      sendMessage,
+      aiParse: vi.fn(),
+      pagesBaseUrl: 'https://example.github.io/superbot',
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(111, 'הוסר: 🥛 חלב');
+  });
+
+  it('puts an icon before each item when showing the list', async () => {
+    await db.collection('households/main/items').add({
+      name: 'חלב', normalizedName: 'חלב', addedAt: 1, addedBy: 111, recurring: false,
+    });
+    await db.collection('households/main/items').add({
+      name: 'עגבניות', normalizedName: 'עגבניות', addedAt: 2, addedBy: 111, recurring: false,
+    });
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+
+    await handleUpdate(makeUpdate('הצג רשימה'), {
+      db,
+      sendMessage,
+      aiParse: vi.fn(),
+      pagesBaseUrl: 'https://example.github.io/superbot',
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(111, '• 🥛 חלב\n• 🍅 עגבניות');
   });
 
   it('replies with a trip link for "אני בסופר"', async () => {

@@ -6,6 +6,7 @@ import type { TelegramUpdate } from '../telegram/types';
 import * as items from '../firestore/items';
 import * as trips from '../firestore/trips';
 import { isHouseholdMember } from '../firestore/household';
+import { withIcon } from '../parser/productIcons';
 
 export interface HandleUpdateDeps {
   db: Firestore;
@@ -36,19 +37,25 @@ export async function handleUpdate(update: TelegramUpdate, deps: HandleUpdateDep
   switch (parsed.action) {
     case 'add': {
       const added = await items.addItems(deps.db, parsed.items, chatId);
-      await deps.sendMessage(chatId, added.length > 0 ? `נוסף: ${added.join(', ')}` : 'כבר ברשימה');
+      await deps.sendMessage(
+        chatId,
+        added.length > 0 ? `נוסף: ${added.map(withIcon).join(', ')}` : 'כבר ברשימה'
+      );
       break;
     }
     case 'remove': {
       const removed = await items.removeItems(deps.db, parsed.items);
-      await deps.sendMessage(chatId, removed.length > 0 ? `הוסר: ${removed.join(', ')}` : 'לא נמצא ברשימה');
+      await deps.sendMessage(
+        chatId,
+        removed.length > 0 ? `הוסר: ${removed.map(withIcon).join(', ')}` : 'לא נמצא ברשימה'
+      );
       break;
     }
     case 'show': {
       const current = await items.listItems(deps.db);
       await deps.sendMessage(
         chatId,
-        current.length > 0 ? current.map((i) => `• ${i.name}`).join('\n') : 'הרשימה ריקה'
+        current.length > 0 ? current.map((i) => `• ${withIcon(i.name)}`).join('\n') : 'הרשימה ריקה'
       );
       break;
     }

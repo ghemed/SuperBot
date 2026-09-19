@@ -1,4 +1,5 @@
 import { watchHistory } from "./db.js";
+import { withIcon } from "./product-icons.js";
 
 const listEl = document.getElementById("list");
 const emptyEl = document.getElementById("empty");
@@ -31,7 +32,7 @@ watchHistory((trips) => {
       // viewing this page - same reasoning as trip-page.js's item rows.
       const summaryDiv = document.createElement("div");
       summaryDiv.className = "summary";
-      const names = (trip.purchased || []).map((p) => p.name).join(", ");
+      const names = (trip.purchased || []).map((p) => withIcon(p.name)).join(", ");
       summaryDiv.textContent = names || "אין פריטים";
 
       a.append(dateDiv, summaryDiv);
