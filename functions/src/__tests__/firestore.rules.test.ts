@@ -14,7 +14,11 @@ let testEnv: RulesTestEnvironment;
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: 'demo-superbot',
-    firestore: { rules: readFileSync('../firestore.rules', 'utf8') },
+    firestore: {
+      rules: readFileSync('../firestore.rules', 'utf8'),
+      host: 'localhost',
+      port: 8080,
+    },
   });
 });
 
@@ -26,20 +30,15 @@ beforeEach(async () => {
   await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), 'households/main'), {
-      memberUids: ['uid-a', 'uid-b'],
+      memberChatIds: [111],
     });
   });
 });
 
 describe('firestore rules', () => {
-  it('lets a household member read the item list', async () => {
-    const memberDb = testEnv.authenticatedContext('uid-a').firestore();
-    await assertSucceeds(getDoc(doc(memberDb, 'households/main/items/x')));
-  });
-
-  it('blocks a non-member from reading the item list', async () => {
-    const strangerDb = testEnv.authenticatedContext('uid-z').firestore();
-    await assertFails(getDoc(doc(strangerDb, 'households/main/items/x')));
+  it('lets any signed-in (anonymous) user read the item list', async () => {
+    const userDb = testEnv.authenticatedContext('uid-a').firestore();
+    await assertSucceeds(getDoc(doc(userDb, 'households/main/items/x')));
   });
 
   it('blocks an unauthenticated read', async () => {
@@ -52,27 +51,22 @@ describe('firestore rules', () => {
   // that accidentally special-cases one of them, not just "items".
   const HOUSEHOLD_COLLECTIONS = ['items', 'trips', 'purchaseHistory'];
 
-  it.each(HOUSEHOLD_COLLECTIONS)('lets a household member write to %s', async (collection) => {
-    const memberDb = testEnv.authenticatedContext('uid-a').firestore();
-    await assertSucceeds(setDoc(doc(memberDb, `households/main/${collection}/x`), { test: true }));
+  it.each(HOUSEHOLD_COLLECTIONS)('lets any signed-in user write to %s', async (collection) => {
+    const userDb = testEnv.authenticatedContext('uid-a').firestore();
+    await assertSucceeds(setDoc(doc(userDb, `households/main/${collection}/x`), { test: true }));
   });
 
-  it.each(HOUSEHOLD_COLLECTIONS)('blocks a non-member from writing to %s', async (collection) => {
-    const strangerDb = testEnv.authenticatedContext('uid-z').firestore();
-    await assertFails(setDoc(doc(strangerDb, `households/main/${collection}/x`), { test: true }));
-  });
-
-  it('blocks an unauthenticated write', async () => {
+  it.each(HOUSEHOLD_COLLECTIONS)('blocks an unauthenticated write to %s', async (collection) => {
     const anonDb = testEnv.unauthenticatedContext().firestore();
-    await assertFails(setDoc(doc(anonDb, 'households/main/items/x'), { test: true }));
+    await assertFails(setDoc(doc(anonDb, `households/main/${collection}/x`), { test: true }));
   });
 
-  it('blocks a household member from writing to households/main itself', async () => {
-    // memberUids is set once manually (console/Admin SDK) - never from the
-    // app, even by a legitimate member.
-    const memberDb = testEnv.authenticatedContext('uid-a').firestore();
+  it('blocks a signed-in user from writing to households/main itself', async () => {
+    // memberChatIds is set once manually (console/Admin SDK) - never from
+    // the app, even by a legitimate signed-in user.
+    const userDb = testEnv.authenticatedContext('uid-a').firestore();
     await assertFails(
-      setDoc(doc(memberDb, 'households/main'), { memberUids: ['uid-a', 'uid-z'] })
+      setDoc(doc(userDb, 'households/main'), { memberChatIds: [111, 222] })
     );
   });
 });

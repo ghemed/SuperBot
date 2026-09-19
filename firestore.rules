@@ -1,19 +1,19 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isMember() {
-      return request.auth != null &&
-        request.auth.uid in
-          get(/databases/$(database)/documents/households/main).data.memberUids;
-    }
-
+    // Anyone who has the page URL and completes the app's transparent
+    // anonymous sign-in gets access - not locked to a fixed set of
+    // pre-approved UIDs, so any of either spouse's devices/browsers works
+    // immediately with no manual whitelisting step. Accepted tradeoff for a
+    // low-sensitivity shared shopping list: this is "unlisted URL" security,
+    // not real access control.
     match /households/main {
-      allow read: if isMember();
+      allow read: if request.auth != null;
       allow write: if false;
     }
 
     match /households/main/{collection}/{docId} {
-      allow read, write: if isMember();
+      allow read, write: if request.auth != null;
     }
   }
 }
