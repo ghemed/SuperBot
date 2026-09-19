@@ -34,8 +34,8 @@ export async function ensureSignedIn() {
   await auth.authStateReady();
   if (auth.currentUser) return auth.currentUser;
 
-  // Every page calls ensureSignedIn() from more than one place at once
-  // (e.g. trip-page.js's watchItems and watchTrip, both at module load,
+  // A page can call ensureSignedIn() from more than one place at once
+  // (e.g. the live listener at load plus a write fired straight away,
   // neither awaiting the other). Without sharing one in-flight promise,
   // each of those concurrent calls independently observes "not signed in
   // yet" and calls signInAnonymously() itself, minting a separate

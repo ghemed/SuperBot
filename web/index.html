@@ -8,22 +8,48 @@
 </head>
 <body>
 <div class="phone">
-  <a id="trip-banner" class="banner hidden" href="#">
-    <span>יש טיול קנייה פעיל - המשיכו כאן</span>
-    <span>›</span>
-  </a>
   <div class="card">
-    <header>
-      <div class="eyebrow">רשימת קניות משותפת</div>
-      <h1>העגלה שלנו</h1>
-      <div class="meta"><span id="count">0</span> פריטים</div>
-    </header>
-    <ul class="list" id="list"></ul>
-    <p class="empty hidden" id="empty">הרשימה ריקה - תוסיפו פריט למטה, או פשוט תכתבו לבוט בטלגרם</p>
-    <form class="addbar" id="add-form">
-      <input id="add-input" type="text" placeholder="פריט חדש..." autocomplete="off" />
-      <button class="btn btn-primary" type="submit">הוסף</button>
-    </form>
+
+    <div id="screen-list">
+      <header>
+        <div class="eyebrow">רשימת קניות משותפת</div>
+        <h1>העגלה שלנו</h1>
+        <div class="meta" id="meta"></div>
+      </header>
+      <ul class="list" id="list"></ul>
+      <p class="empty hidden" id="empty">הרשימה ריקה - תוסיפו פריט למטה, או פשוט תכתבו לבוט בטלגרם</p>
+      <form class="addbar" id="add-form">
+        <input id="add-input" type="text" placeholder="פריט חדש..." autocomplete="off" />
+        <button class="btn btn-primary" type="submit">הוסף</button>
+      </form>
+      <footer id="finish-footer" class="hidden">
+        <button class="btn btn-primary" id="finish-btn" type="button">סיימתי לקנות</button>
+      </footer>
+    </div>
+
+    <div id="screen-recap" class="hidden">
+      <div style="padding:18px 20px 6px;">
+        <h1 style="font-size:20px;">סיכום קנייה</h1>
+        <p style="color:var(--text-muted); font-size:13.5px; margin:4px 0 0;">אפשר להחליט מה נשאר לשבוע הבא לפני שמעדכנים את הרשימה.</p>
+      </div>
+      <div class="section-label">להישאר ברשימה?</div>
+      <div id="suggestions"></div>
+      <footer>
+        <button class="btn btn-primary" id="confirm-btn" type="button">עדכון הרשימה</button>
+        <button class="btn btn-ghost" id="back-btn" type="button">חזרה</button>
+      </footer>
+    </div>
+
+    <div id="screen-done" class="hidden">
+      <div style="padding:44px 24px 40px; text-align:center;">
+        <h1 style="font-size:20px;">הרשימה עודכנה</h1>
+        <p style="color:var(--text-muted); font-size:14px;" id="done-summary"></p>
+      </div>
+      <footer>
+        <button class="btn btn-primary" id="done-back-btn" type="button">חזרה לרשימה</button>
+      </footer>
+    </div>
+
   </div>
   <div class="note"><a href="history.html">היסטוריית קניות ›</a></div>
 </div>

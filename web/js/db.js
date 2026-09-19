@@ -1,9 +1,10 @@
 // web/js/db.js
 import { db, ensureSignedIn } from "./firebase-init.js";
 import { isRecurringCandidate } from "./recurring.js";
+import { planFinish } from "./finish-plan.js";
 import {
   collection, doc, addDoc, deleteDoc, updateDoc, getDoc, onSnapshot,
-  query, orderBy, where, limit, arrayUnion, arrayRemove,
+  query, orderBy, where, limit, arrayUnion,
   runTransaction, getDocs,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
@@ -26,7 +27,7 @@ export async function watchItems(onChange) {
   return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
 }
 
-// Known accepted limitation: unlike the bot's server-side addItems
+// Known accepted limitation: unlike the bot's server-side addItem
 // (functions/src/firestore/items.ts, which runs its duplicate-check-then-
 // write inside a transaction), addItem/renameItem here do no dedup at all -
 // two items can end up with the same normalizedName (e.g. renaming "Milk"
@@ -42,6 +43,7 @@ export async function addItem(name) {
     addedAt: Date.now(),
     addedBy: "web",
     recurring: false,
+    checked: false,
   });
 }
 
@@ -63,22 +65,12 @@ export async function setRecurring(itemId, recurring) {
   await updateDoc(doc(itemsCol, itemId), { recurring });
 }
 
-export async function watchActiveTrip(onChange) {
+// A tick is a field on the item itself, so both phones see it through the
+// same live listener as every other edit - there is no separate trip
+// document to keep in sync.
+export async function setChecked(itemId, checked) {
   await ensureSignedIn();
-  const q = query(tripsCol, where("status", "==", "active"), limit(1));
-  return onSnapshot(q, (snap) => onChange(snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() }));
-}
-
-export async function watchTrip(tripId, onChange) {
-  await ensureSignedIn();
-  return onSnapshot(doc(tripsCol, tripId), (snap) => onChange(snap.exists() ? { id: snap.id, ...snap.data() } : null));
-}
-
-export async function toggleChecked(tripId, itemId, checked) {
-  await ensureSignedIn();
-  await updateDoc(doc(tripsCol, tripId), {
-    checkedItemIds: checked ? arrayUnion(itemId) : arrayRemove(itemId),
-  });
+  await updateDoc(doc(itemsCol, itemId), { checked });
 }
 
 export async function getRecurringCandidates(checkedItems) {
@@ -104,53 +96,55 @@ export async function getRecurringCandidates(checkedItems) {
   return candidates;
 }
 
-export async function finishTrip(tripId, checkedItems, keepItemIds) {
+// Finishes a shopping trip: the trip document is created here, at the end,
+// rather than when shopping starts. Returns null when there was nothing left
+// to finish (another device got there first), otherwise the purchased items
+// and the names of the ones that stay on the list.
+export async function finishTrip(checkedItems, keepItemIds) {
   await ensureSignedIn();
-  const tripRef = doc(tripsCol, tripId);
 
-  // A transaction (not a plain batch) so a double-tap of "finish" or a
-  // retry after a perceived timeout can't apply the same trip twice - the
-  // status check below makes a second call a no-op instead of appending a
-  // second purchase-history entry and creating a second "kept" item doc
-  // for the same underlying item.
-  await runTransaction(db, async (transaction) => {
-    const tripSnap = await transaction.get(tripRef);
-    if (!tripSnap.exists() || tripSnap.data().status !== "active") {
-      return;
+  // A transaction (not a plain batch) so a double tap of "finish", a retry
+  // after a perceived timeout, or both phones finishing at once can't record
+  // the same purchase twice.
+  return runTransaction(db, async (transaction) => {
+    // Firestore requires every read before any write. Re-reading the items
+    // here, instead of trusting the copies this device holds, is what lets
+    // planFinish skip anything another device already finished or unticked.
+    const snapshots = [];
+    for (const item of checkedItems) {
+      const snap = await transaction.get(doc(itemsCol, item.id));
+      snapshots.push({ id: item.id, exists: snap.exists(), data: snap.exists() ? snap.data() : undefined });
     }
 
-    const purchased = [];
-    const recurringDecisions = [];
+    const plan = planFinish(snapshots, keepItemIds);
+    if (plan.items.length === 0) return null;
 
-    for (const item of checkedItems) {
-      const kept = keepItemIds.has(item.id);
-      purchased.push({ itemId: item.id, name: item.name, price: null });
-      recurringDecisions.push({ name: item.name, kept });
-
-      transaction.delete(doc(itemsCol, item.id));
-      if (kept) {
-        transaction.set(doc(itemsCol), {
-          name: item.name,
-          normalizedName: item.normalizedName,
-          addedAt: Date.now(),
-          addedBy: "web",
-          recurring: true,
-        });
+    const tripRef = doc(tripsCol);
+    for (const item of plan.items) {
+      const itemRef = doc(itemsCol, item.id);
+      if (item.kept) {
+        transaction.update(itemRef, { checked: false, recurring: true });
+      } else {
+        transaction.delete(itemRef);
       }
-
       transaction.set(
         doc(historyCol, historyDocId(item.normalizedName)),
-        { name: item.name, purchases: arrayUnion({ tripId, date: Date.now() }) },
+        { name: item.name, purchases: arrayUnion({ tripId: tripRef.id, date: Date.now() }) },
         { merge: true }
       );
     }
 
-    transaction.update(tripRef, {
+    transaction.set(tripRef, {
       status: "completed",
       completedAt: Date.now(),
-      purchased,
-      recurringDecisions,
+      purchased: plan.purchased,
+      recurringDecisions: plan.recurringDecisions,
     });
+
+    return {
+      purchased: plan.purchased,
+      kept: plan.items.filter((item) => item.kept).map((item) => item.name),
+    };
   });
 }
 
