@@ -18,9 +18,8 @@ watchHistory((trips) => {
     // future migration bug) shouldn't throw mid-loop and leave every trip
     // after it - and the already-run emptyEl toggle above - unrendered.
     try {
-      const a = document.createElement("a");
-      a.className = "history-row";
-      a.href = `trip.html?id=${trip.id}`;
+      const row = document.createElement("div");
+      row.className = "history-row";
 
       const dateDiv = document.createElement("div");
       dateDiv.className = "date";
@@ -29,14 +28,14 @@ watchHistory((trips) => {
       // textContent, not innerHTML: purchased item names are free text
       // (typed by either household member), so interpolating them into
       // markup would let a crafted name execute as script for anyone
-      // viewing this page - same reasoning as trip-page.js's item rows.
+      // viewing this page - same reasoning as list-page.js's item rows.
       const summaryDiv = document.createElement("div");
       summaryDiv.className = "summary";
       const names = (trip.purchased || []).map((p) => withIcon(p.name)).join(", ");
       summaryDiv.textContent = names || "אין פריטים";
 
-      a.append(dateDiv, summaryDiv);
-      listEl.appendChild(a);
+      row.append(dateDiv, summaryDiv);
+      listEl.appendChild(row);
     } catch (error) {
       logFailure(`render trip ${trip.id}`)(error);
     }
