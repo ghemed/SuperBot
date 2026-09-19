@@ -9,6 +9,7 @@ export interface Item {
   addedAt: number;
   addedBy: number;
   recurring: boolean;
+  checked?: boolean;
 }
 
 function itemsCollection(db: Firestore) {
@@ -35,6 +36,7 @@ export async function addItems(db: Firestore, names: string[], addedBy: number):
         addedAt: Date.now(),
         addedBy,
         recurring: false,
+        checked: false,
       });
       return true;
     });

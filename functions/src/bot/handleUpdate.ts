@@ -4,7 +4,6 @@ import { parseMessage, type AiParse } from '../parser/parseMessage';
 import type { SendTelegramMessage } from '../telegram/sendMessage';
 import type { TelegramUpdate } from '../telegram/types';
 import * as items from '../firestore/items';
-import * as trips from '../firestore/trips';
 import { isHouseholdMember } from '../firestore/household';
 import { withIcon } from '../parser/productIcons';
 
@@ -60,8 +59,7 @@ export async function handleUpdate(update: TelegramUpdate, deps: HandleUpdateDep
       break;
     }
     case 'at_store': {
-      const trip = await trips.getOrCreateActiveTrip(deps.db, chatId);
-      await deps.sendMessage(chatId, `בהצלחה בסופר! 🛒\n${deps.pagesBaseUrl}/trip.html?id=${trip.id}`);
+      await deps.sendMessage(chatId, `בהצלחה בסופר! 🛒\n${deps.pagesBaseUrl}/`);
       break;
     }
     case 'unclear': {

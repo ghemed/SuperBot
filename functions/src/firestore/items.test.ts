@@ -21,6 +21,12 @@ describe('items', () => {
     expect(current.map((i) => i.name)).toEqual(['חלב']);
   });
 
+  it('stores a new item as not ticked', async () => {
+    await addItems(db, ['חלב'], 111);
+    const snap = await db.collection('households/main/items').get();
+    expect(snap.docs[0].data().checked).toBe(false);
+  });
+
   it('does not add a duplicate of an existing item', async () => {
     await addItems(db, ['חלב'], 111);
     const added = await addItems(db, ['חלב'], 222);

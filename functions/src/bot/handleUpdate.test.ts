@@ -89,7 +89,7 @@ describe('handleUpdate', () => {
     expect(sendMessage).toHaveBeenCalledWith(111, '• 🥛 חלב\n• 🍅 עגבניות');
   });
 
-  it('replies with a trip link for "אני בסופר"', async () => {
+  it('replies with a link to the main page for "אני בסופר" and starts no trip', async () => {
     const sendMessage = vi.fn().mockResolvedValue(undefined);
     const aiParse = vi.fn();
 
@@ -100,10 +100,9 @@ describe('handleUpdate', () => {
       pagesBaseUrl: 'https://example.github.io/superbot',
     });
 
-    expect(sendMessage).toHaveBeenCalledWith(
-      111,
-      expect.stringMatching(/^בהצלחה בסופר! 🛒\nhttps:\/\/example\.github\.io\/superbot\/trip\.html\?id=.+$/)
-    );
+    expect(sendMessage).toHaveBeenCalledWith(111, 'בהצלחה בסופר! 🛒\nhttps://example.github.io/superbot/');
+    const trips = await db.collection('households/main/trips').get();
+    expect(trips.empty).toBe(true);
   });
 
   it('asks to rephrase when both the rules and the AI fallback are unsure', async () => {
