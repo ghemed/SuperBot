@@ -28,9 +28,9 @@ export async function ensureSignedIn() {
   // session from IndexedDB, which happens asynchronously AFTER getAuth()
   // returns - reading currentUser before that resolves would see "null"
   // even when a persisted anonymous session already exists, and mint a
-  // brand new anonymous UID instead of reusing it. Since firestore.rules
-  // allowlists exactly two fixed UIDs, a rotated UID locks that member out
-  // until someone manually re-adds the new UID in the console.
+  // brand new anonymous UID instead of reusing it. firestore.rules only
+  // requires some signed-in user, so a rotated UID no longer locks anyone
+  // out, but it still piles up throwaway anonymous accounts.
   await auth.authStateReady();
   if (auth.currentUser) return auth.currentUser;
 
@@ -41,7 +41,7 @@ export async function ensureSignedIn() {
   // yet" and calls signInAnonymously() itself, minting a separate
   // anonymous account per call - confirmed in production: a single page
   // load was creating two different anonymous users instead of reusing
-  // one, undermining the whole point of a stable per-device UID.
+  // one, needlessly piling up anonymous accounts.
   if (!signInPromise) {
     signInPromise = signInAnonymously(auth).finally(() => {
       signInPromise = null;

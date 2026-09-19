@@ -26,6 +26,18 @@ describe('planFinish', () => {
     expect(plan.items.map((i) => i.id)).toEqual(['a']);
   });
 
+  it('skips an item whose document has no name or no normalized name', () => {
+    const plan = planFinish(
+      [
+        snapshot('a', ticked('חלב')),
+        snapshot('b', { checked: true, normalizedName: 'x' }),
+        snapshot('c', { checked: true, name: 'x' }),
+      ],
+      new Set()
+    );
+    expect(plan.items.map((i) => i.id)).toEqual(['a']);
+  });
+
   it('marks an item as kept only when its id is in the keep set', () => {
     const plan = planFinish(
       [snapshot('a', ticked('חלב')), snapshot('b', ticked('לחם'))],

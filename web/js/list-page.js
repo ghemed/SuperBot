@@ -53,7 +53,6 @@ function createRow() {
   box.type = "button";
   box.className = "box";
   box.setAttribute("role", "checkbox");
-  box.setAttribute("aria-label", "סמן פריט");
   box.innerHTML = CHECK_SVG;
 
   // Separate from the input so the icon is display-only and can never end up
@@ -64,6 +63,7 @@ function createRow() {
 
   const nameInput = document.createElement("input");
   nameInput.className = "name";
+  nameInput.setAttribute("aria-label", "שם הפריט");
 
   const tag = document.createElement("button");
   tag.type = "button";
@@ -105,6 +105,7 @@ function updateRow(row, item) {
   const checked = item.checked === true;
   row.li.classList.toggle("checked", checked);
   row.box.setAttribute("aria-checked", String(checked));
+  row.box.setAttribute("aria-label", `סמן ${item.name}`);
   row.icon.textContent = iconFor(item.name);
   if (document.activeElement !== row.nameInput) row.nameInput.value = item.name;
   row.tag.classList.toggle("off", !item.recurring);

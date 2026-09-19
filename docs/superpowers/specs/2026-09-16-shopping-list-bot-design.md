@@ -1,6 +1,6 @@
 # SuperBot: Shared Shopping List Bot - Design
 
-> **Partly superseded:** the trip page, the "אני בסופר" flow and the `trips` data shape are replaced by [2026-09-19-unified-list-view-design.md](2026-09-19-unified-list-view-design.md).
+> **Partly superseded:** the trip page, the history page's per-trip links, the "אני בסופר" flow and the `trips` data shape are replaced by [2026-09-19-unified-list-view-design.md](2026-09-19-unified-list-view-design.md).
 
 ## Overview
 

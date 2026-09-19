@@ -27,7 +27,7 @@ export async function watchItems(onChange) {
   return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
 }
 
-// Known accepted limitation: unlike the bot's server-side addItem
+// Known accepted limitation: unlike the bot's server-side addItems
 // (functions/src/firestore/items.ts, which runs its duplicate-check-then-
 // write inside a transaction), addItem/renameItem here do no dedup at all -
 // two items can end up with the same normalizedName (e.g. renaming "Milk"
@@ -120,6 +120,12 @@ export async function finishTrip(checkedItems, keepItemIds) {
     if (plan.items.length === 0) return null;
 
     const tripRef = doc(tripsCol);
+    // Two rows can share a normalizedName (the web add bar does no duplicate
+    // check). One product bought once per trip needs one purchase record and
+    // one write to its history document, so only the first row with a given
+    // history id writes it; every row is still deleted or kept. Declared
+    // inside the callback so a retry of the transaction starts empty.
+    const historyIdsWritten = new Set();
     for (const item of plan.items) {
       const itemRef = doc(itemsCol, item.id);
       if (item.kept) {
@@ -127,11 +133,15 @@ export async function finishTrip(checkedItems, keepItemIds) {
       } else {
         transaction.delete(itemRef);
       }
-      transaction.set(
-        doc(historyCol, historyDocId(item.normalizedName)),
-        { name: item.name, purchases: arrayUnion({ tripId: tripRef.id, date: Date.now() }) },
-        { merge: true }
-      );
+      const historyId = historyDocId(item.normalizedName);
+      if (!historyIdsWritten.has(historyId)) {
+        historyIdsWritten.add(historyId);
+        transaction.set(
+          doc(historyCol, historyId),
+          { name: item.name, purchases: arrayUnion({ tripId: tripRef.id, date: Date.now() }) },
+          { merge: true }
+        );
+      }
     }
 
     transaction.set(tripRef, {
