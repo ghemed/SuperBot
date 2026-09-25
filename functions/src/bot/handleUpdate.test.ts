@@ -70,7 +70,7 @@ describe('handleUpdate', () => {
     expect(sendMessage).toHaveBeenCalledWith(111, 'הוסר: 🥛 חלב');
   });
 
-  it('puts an icon before each item when showing the list', async () => {
+  it('shows the list grouped by store section, with an icon before each item', async () => {
     await db.collection('households/main/items').add({
       name: 'חלב', normalizedName: 'חלב', addedAt: 1, addedBy: 111, recurring: false,
     });
@@ -86,7 +86,7 @@ describe('handleUpdate', () => {
       pagesBaseUrl: 'https://example.github.io/superbot',
     });
 
-    expect(sendMessage).toHaveBeenCalledWith(111, '• 🥛 חלב\n• 🍅 עגבניות');
+    expect(sendMessage).toHaveBeenCalledWith(111, 'ירקות ופירות\n• 🍅 עגבניות\n\nמוצרי חלב וביצים\n• 🥛 חלב');
   });
 
   it('replies with a link to the main page for "אני בסופר" and starts no trip', async () => {

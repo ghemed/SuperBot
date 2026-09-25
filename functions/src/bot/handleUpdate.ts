@@ -6,6 +6,7 @@ import type { TelegramUpdate } from '../telegram/types';
 import * as items from '../firestore/items';
 import { isHouseholdMember } from '../firestore/household';
 import { withIcon } from '../parser/productIcons';
+import { formatList } from '../parser/listOrder';
 
 export interface HandleUpdateDeps {
   db: Firestore;
@@ -54,7 +55,7 @@ export async function handleUpdate(update: TelegramUpdate, deps: HandleUpdateDep
       const current = await items.listItems(deps.db);
       await deps.sendMessage(
         chatId,
-        current.length > 0 ? current.map((i) => `• ${withIcon(i.name)}`).join('\n') : 'הרשימה ריקה'
+        current.length > 0 ? formatList(current) : 'הרשימה ריקה'
       );
       break;
     }

@@ -3,6 +3,7 @@ import {
   getRecurringCandidates, finishTrip,
 } from "./db.js";
 import { iconFor, withIcon } from "./product-icons.js";
+import { groupItems, longestIncreasingSubsequence } from "./list-order.js";
 
 const listEl = document.getElementById("list");
 const emptyEl = document.getElementById("empty");
@@ -42,6 +43,8 @@ let recapItems = [];
 // the other phone arrives as a snapshot, and rebuilding the list would wipe a
 // name being typed into an input on this one.
 const rows = new Map();
+// group id -> the section heading <li> shown above that group's rows
+const headings = new Map();
 
 // Item names are free text from either household member, so every name goes
 // in through textContent or an input's value, never innerHTML.
@@ -120,10 +123,10 @@ function render() {
   emptyEl.classList.toggle("hidden", currentItems.length > 0);
   finishFooter.classList.toggle("hidden", tickedCount === 0);
 
-  // Rows whose item is gone are removed BEFORE anything is placed. A stale row
-  // still in the DOM would sit where a current row is expected, so every row
-  // below it would be moved with insertBefore - and moving a row blurs a name
-  // being typed into it, silently dropping that edit.
+  const groups = groupItems(currentItems);
+
+  // Rows and headings that are no longer shown are removed BEFORE anything is
+  // placed, so they can't sit where a current node is expected.
   const currentIds = new Set(currentItems.map((item) => item.id));
   for (const [id, row] of rows) {
     if (!currentIds.has(id)) {
@@ -131,22 +134,54 @@ function render() {
       rows.delete(id);
     }
   }
-
-  let previous = null;
-  for (const item of currentItems) {
-    let row = rows.get(item.id);
-    if (!row) {
-      row = createRow();
-      rows.set(item.id, row);
+  const groupIds = new Set(groups.map((group) => group.id));
+  for (const [id, heading] of headings) {
+    if (!groupIds.has(id)) {
+      heading.remove();
+      headings.delete(id);
     }
-    updateRow(row, item);
-    // Keep the DOM order identical to currentItems by moving a row only when
-    // it is not already right after the previous one. With the stale rows gone
-    // and the items ordered by their fixed addedAt, that is normally just a
-    // new row being added at the end, so existing rows are left where they are.
-    const expectedPosition = previous ? previous.li.nextSibling : listEl.firstChild;
-    if (row.li !== expectedPosition) listEl.insertBefore(row.li, expectedPosition);
-    previous = row;
+  }
+
+  const desired = [];
+  for (const group of groups) {
+    let heading = headings.get(group.id);
+    if (!heading) {
+      heading = document.createElement("li");
+      heading.className = "group-label";
+      heading.setAttribute("role", "presentation");
+      headings.set(group.id, heading);
+    }
+    heading.textContent = group.label;
+    desired.push(heading);
+
+    for (const item of group.items) {
+      let row = rows.get(item.id);
+      if (!row) {
+        row = createRow();
+        rows.set(item.id, row);
+      }
+      updateRow(row, item);
+      desired.push(row.li);
+    }
+  }
+  placeInOrder(desired);
+}
+
+// Puts listEl's children in the `desired` order while moving as few nodes as
+// possible. Moving a node blurs an input inside it, which would silently drop
+// a name being typed, so when the other phone ticks an item only that item's
+// row is moved: the longest run of nodes already in the right relative order
+// stays put and everything else is inserted around it.
+function placeInOrder(desired) {
+  const position = new Map(desired.map((node, index) => [node, index]));
+  const present = [...listEl.children].filter((node) => position.has(node));
+  const keep = new Set(
+    longestIncreasingSubsequence(present.map((node) => position.get(node))).map((i) => present[i])
+  );
+  // Walking backwards, every node's successor is already in its final place.
+  for (let i = desired.length - 1; i >= 0; i--) {
+    if (keep.has(desired[i])) continue;
+    listEl.insertBefore(desired[i], desired[i + 1] ?? null);
   }
 }
 
