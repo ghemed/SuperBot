@@ -7,6 +7,7 @@ import * as items from '../firestore/items';
 import { isHouseholdMember } from '../firestore/household';
 import { withIcon } from '../parser/productIcons';
 import { formatList } from '../parser/listOrder';
+import { listCategoryOverrides } from '../firestore/categoryOverrides';
 
 export interface HandleUpdateDeps {
   db: Firestore;
@@ -52,10 +53,13 @@ export async function handleUpdate(update: TelegramUpdate, deps: HandleUpdateDep
       break;
     }
     case 'show': {
-      const current = await items.listItems(deps.db);
+      const [current, overrides] = await Promise.all([
+        items.listItems(deps.db),
+        listCategoryOverrides(deps.db),
+      ]);
       await deps.sendMessage(
         chatId,
-        current.length > 0 ? formatList(current) : 'הרשימה ריקה'
+        current.length > 0 ? formatList(current, overrides) : 'הרשימה ריקה'
       );
       break;
     }

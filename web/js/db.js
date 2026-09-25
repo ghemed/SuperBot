@@ -3,7 +3,7 @@ import { db, ensureSignedIn } from "./firebase-init.js";
 import { isRecurringCandidate } from "./recurring.js";
 import { planFinish } from "./finish-plan.js";
 import {
-  collection, doc, addDoc, deleteDoc, updateDoc, getDoc, onSnapshot,
+  collection, doc, addDoc, deleteDoc, updateDoc, getDoc, setDoc, onSnapshot,
   query, orderBy, where, limit, arrayUnion,
   runTransaction, getDocs,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
@@ -11,6 +11,9 @@ import {
 const itemsCol = collection(db, "households/main/items");
 const tripsCol = collection(db, "households/main/trips");
 const historyCol = collection(db, "households/main/purchaseHistory");
+// Sections picked by hand for a product name, read by both the site and the
+// bot (functions/src/firestore/categoryOverrides.ts).
+const overridesCol = collection(db, "households/main/categoryOverrides");
 
 // Firestore document IDs can't contain "/" (it's a path separator there,
 // not a literal character) or be exactly "." or "..". An item name is
@@ -25,6 +28,27 @@ export async function watchItems(onChange) {
   await ensureSignedIn();
   const q = query(itemsCol, orderBy("addedAt", "asc"));
   return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
+}
+
+// Calls onChange with a Map of categoryKey(name) -> category id.
+export async function watchCategoryOverrides(onChange) {
+  await ensureSignedIn();
+  return onSnapshot(overridesCol, (snap) => {
+    const overrides = new Map();
+    for (const d of snap.docs) {
+      const { key, category } = d.data();
+      if (typeof key === "string" && typeof category === "string") overrides.set(key, category);
+    }
+    onChange(overrides);
+  });
+}
+
+// Remembers the section for every item with this name, now and whenever it is
+// added again. `key` is categoryKey(name); the doc ID is only an escaped copy
+// of it, so readers use the field.
+export async function setCategoryOverride(key, name, categoryId) {
+  await ensureSignedIn();
+  await setDoc(doc(overridesCol, historyDocId(key)), { key, name: name.trim(), category: categoryId });
 }
 
 // Known accepted limitation: unlike the bot's server-side addItems
