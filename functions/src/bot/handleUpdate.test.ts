@@ -9,7 +9,7 @@ const app = initializeApp({ projectId: 'demo-superbot' }, 'handle-update-test');
 const db = getFirestore(app);
 
 beforeEach(async () => {
-  for (const col of ['items', 'trips']) {
+  for (const col of ['items', 'trips', 'categoryOverrides']) {
     const docs = await db.collection(`households/main/${col}`).listDocuments();
     await Promise.all(docs.map((d) => d.delete()));
   }
@@ -87,6 +87,25 @@ describe('handleUpdate', () => {
     });
 
     expect(sendMessage).toHaveBeenCalledWith(111, 'ירקות ופירות\n• 🍅 עגבניות\n\nמוצרי חלב וביצים\n• 🥛 חלב');
+  });
+
+  it('files a product in the section picked for it on the site', async () => {
+    await db.collection('households/main/items').add({
+      name: 'עלי גפן', normalizedName: 'עלי גפן', addedAt: 1, addedBy: 111, recurring: false,
+    });
+    await db.collection('households/main/categoryOverrides').add({
+      key: 'עלי גפן', name: 'עלי גפן', category: 'produce',
+    });
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+
+    await handleUpdate(makeUpdate('הצג רשימה'), {
+      db,
+      sendMessage,
+      aiParse: vi.fn(),
+      pagesBaseUrl: 'https://example.github.io/superbot',
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(111, 'ירקות ופירות\n• 🥬 עלי גפן');
   });
 
   it('replies with a link to the main page for "אני בסופר" and starts no trip', async () => {

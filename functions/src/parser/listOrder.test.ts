@@ -18,6 +18,13 @@ describe('formatList', () => {
     );
   });
 
+  it("files hand-picked products in their section with the section's icon", () => {
+    const overrides = new Map([['עלי גפן', 'produce']]);
+    expect(formatList([{ name: 'לחם' }, { name: 'עלי גפן' }], overrides)).toBe(
+      'ירקות ופירות\n• 🥬 עלי גפן\n\nלחם ומאפים\n• 🍞 לחם'
+    );
+  });
+
   it('is empty for an empty list', () => {
     expect(formatList([])).toBe('');
   });

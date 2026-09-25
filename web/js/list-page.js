@@ -1,9 +1,11 @@
 import {
   watchItems, addItem, deleteItem, renameItem, setRecurring, setChecked,
-  getRecurringCandidates, finishTrip,
+  getRecurringCandidates, finishTrip, watchCategoryOverrides, setCategoryOverride,
 } from "./db.js";
-import { iconFor, withIcon } from "./product-icons.js";
-import { groupItems, longestIncreasingSubsequence } from "./list-order.js";
+import { withIcon } from "./product-icons.js";
+import {
+  CATEGORIES, categoryKey, categoryOf, displayIcon, groupItems, longestIncreasingSubsequence,
+} from "./list-order.js";
 
 const listEl = document.getElementById("list");
 const emptyEl = document.getElementById("empty");
@@ -32,13 +34,15 @@ const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const DELETE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
 let currentItems = [];
+// categoryKey(name) -> category id, for products put in a section by hand
+let overrides = new Map();
 let keepItemIds = new Set();
 // Frozen when "סיימתי לקנות" is pressed, so "עדכון הרשימה" finishes the items
 // the user actually reviewed on the recap screen, not whatever the live list
 // looks like by the time they confirm.
 let recapItems = [];
 
-// item id -> { li, box, icon, nameInput, tag, item }
+// item id -> { li, box, icon, category, nameInput, recurring, item }
 // Rows are updated in place rather than rebuilt on every snapshot: a tick from
 // the other phone arrives as a snapshot, and rebuilding the list would wipe a
 // name being typed into an input on this one.
@@ -59,19 +63,33 @@ function createRow() {
   box.innerHTML = CHECK_SVG;
 
   // Separate from the input so the icon is display-only and can never end up
-  // inside the saved name.
+  // inside the saved name. Tapping it opens a native picker of store sections,
+  // laid invisibly over the icon, to file a product the icon dictionary files
+  // wrongly or not at all.
+  const iconWrap = document.createElement("span");
+  iconWrap.className = "item-icon";
   const icon = document.createElement("span");
-  icon.className = "item-icon";
   icon.setAttribute("aria-hidden", "true");
+  const category = document.createElement("select");
+  category.className = "category-select";
+  for (const { id, label } of CATEGORIES) {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = label;
+    category.append(option);
+  }
+  iconWrap.append(icon, category);
 
   const nameInput = document.createElement("input");
   nameInput.className = "name";
   nameInput.setAttribute("aria-label", "שם הפריט");
 
-  const tag = document.createElement("button");
-  tag.type = "button";
-  tag.className = "tag";
-  tag.textContent = "קבוע";
+  // On: the item stays on the list after "סיימתי לקנות".
+  const recurring = document.createElement("button");
+  recurring.type = "button";
+  recurring.className = "switch switch-sm";
+  recurring.setAttribute("role", "switch");
+  recurring.title = "פריט קבוע";
 
   const del = document.createElement("button");
   del.type = "button";
@@ -79,7 +97,7 @@ function createRow() {
   del.setAttribute("aria-label", "מחק פריט");
   del.innerHTML = DELETE_SVG;
 
-  const row = { li, box, icon, nameInput, tag, item: null };
+  const row = { li, box, icon, category, nameInput, recurring, item: null };
 
   box.addEventListener("click", () => {
     setChecked(row.item.id, row.item.checked !== true).catch(logFailure("update the checked item"));
@@ -92,14 +110,18 @@ function createRow() {
       nameInput.value = row.item.name;
     }
   });
-  tag.addEventListener("click", () => {
+  category.addEventListener("change", () => {
+    setCategoryOverride(categoryKey(row.item.name), row.item.name, category.value)
+      .catch(logFailure("save the item's section"));
+  });
+  recurring.addEventListener("click", () => {
     setRecurring(row.item.id, !row.item.recurring).catch(logFailure("update the item"));
   });
   del.addEventListener("click", () => {
     deleteItem(row.item.id).catch(logFailure("delete the item"));
   });
 
-  li.append(box, icon, nameInput, tag, del);
+  li.append(box, iconWrap, nameInput, recurring, del);
   return row;
 }
 
@@ -109,9 +131,13 @@ function updateRow(row, item) {
   row.li.classList.toggle("checked", checked);
   row.box.setAttribute("aria-checked", String(checked));
   row.box.setAttribute("aria-label", `סמן ${item.name}`);
-  row.icon.textContent = iconFor(item.name);
+  row.icon.textContent = displayIcon(item.name, overrides);
+  row.category.value = categoryOf(item.name, overrides).id;
+  row.category.setAttribute("aria-label", `מחלקה של ${item.name}`);
   if (document.activeElement !== row.nameInput) row.nameInput.value = item.name;
-  row.tag.classList.toggle("off", !item.recurring);
+  row.recurring.classList.toggle("on", item.recurring === true);
+  row.recurring.setAttribute("aria-checked", String(item.recurring === true));
+  row.recurring.setAttribute("aria-label", `${item.name} פריט קבוע`);
 }
 
 function render() {
@@ -123,7 +149,7 @@ function render() {
   emptyEl.classList.toggle("hidden", currentItems.length > 0);
   finishFooter.classList.toggle("hidden", tickedCount === 0);
 
-  const groups = groupItems(currentItems);
+  const groups = groupItems(currentItems, overrides);
 
   // Rows and headings that are no longer shown are removed BEFORE anything is
   // placed, so they can't sit where a current node is expected.
@@ -190,6 +216,13 @@ watchItems((items) => {
   render();
 }).catch((error) => {
   console.error("Failed to load the shopping list:", error);
+});
+
+watchCategoryOverrides((latest) => {
+  overrides = latest;
+  render();
+}).catch((error) => {
+  console.error("Failed to load the hand-picked sections:", error);
 });
 
 addForm.addEventListener("submit", (e) => {

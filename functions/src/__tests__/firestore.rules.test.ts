@@ -47,9 +47,9 @@ describe('firestore rules', () => {
   });
 
   // Every household collection shares the same `{collection}/{docId}`
-  // wildcard rule - looping over all three catches a future rule change
+  // wildcard rule - looping over all of them catches a future rule change
   // that accidentally special-cases one of them, not just "items".
-  const HOUSEHOLD_COLLECTIONS = ['items', 'trips', 'purchaseHistory'];
+  const HOUSEHOLD_COLLECTIONS = ['items', 'trips', 'purchaseHistory', 'categoryOverrides'];
 
   it.each(HOUSEHOLD_COLLECTIONS)('lets any signed-in user write to %s', async (collection) => {
     const userDb = testEnv.authenticatedContext('uid-a').firestore();
