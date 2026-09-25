@@ -1,4 +1,7 @@
 // web/js/list-order.js
+// The bot keeps its own copy of CATEGORIES, categoryOf and groupItems in
+// functions/src/parser/listOrder.ts, so its "show the list" reply is grouped
+// the same way. list-order.test.js fails if the two drift apart.
 import { iconFor, FALLBACK_ICON } from "./product-icons.js";
 
 // Store sections in the order the aisles are walked. Produce is first because
